@@ -63,10 +63,12 @@
   "ignorePatterns": [
     "node_modules/",
     ".next/",
+    ".next/types/**",
     "out/",
     "build/",
     "dist/",
     "*.config.js",
-    "*.config.ts"
+    "*.config.ts",
+    "next-env.d.ts"
   ]
 }
