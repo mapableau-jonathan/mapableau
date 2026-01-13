@@ -1,38 +1,31 @@
 # Dependencies
-node_modules
-.pnp
+node_modules/
+.pnpm-store/
+/.pnp
 .pnp.js
 
 # Testing
-coverage
-*.lcov
-.nyc_output
+/coverage
 
 # Next.js
-.next/
-out/
-build
-dist
+/.next/
+/out/
+next-env.d.ts
 
 # Production
-*.log
+/build
+/dist
+
+# Misc
+.DS_Store
+*.pem
+
+# Debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-
-# Misc
-.DS_Store
-*.pem
-Thumbs.db
-
-# Debug
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
 
 # Local env files
 .env
@@ -48,8 +41,39 @@ Thumbs.db
 *.tsbuildinfo
 next-env.d.ts
 
-# Turbo
-.turbo
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
 
-# Husky
-.husky/_
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Package manager locks (keeping pnpm-lock.yaml, ignoring npm/yarn)
+package-lock.json
+yarn.lock
+
+# Husky (uncomment if you don't want to commit husky hooks)
+# .husky/_/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Logs
+logs
+*.log
