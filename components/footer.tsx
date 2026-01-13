@@ -1,5 +1,7 @@
+"use client";
+
 import { MapPin, Facebook, Twitter, Instagram, Linkedin } from "lucide-react";
-import { Link } from "wouter";
+import Link from "next/link";
 
 export default function Footer() {
   return (

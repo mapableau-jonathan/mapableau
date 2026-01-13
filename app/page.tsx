@@ -1,3 +1,10 @@
+import Home from "@/components/home";
+
 export default function Page() {
-  return <h1>Hello, Next.js!</h1>;
+  return <Home />;
+  return (
+    <div>
+      <Home />
+    </div>
+  );
 }

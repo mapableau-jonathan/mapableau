@@ -1,4 +1,12 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+"use client";
+
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  type ReactNode,
+} from "react";
 
 export type IconStyle = "organic" | "3d";
 
@@ -30,7 +38,7 @@ export function BrandProvider({ children }: { children: ReactNode }) {
   };
 
   const toggleIconStyle = () => {
-    setIconStyleState(prev => prev === "organic" ? "3d" : "organic");
+    setIconStyleState((prev) => (prev === "organic" ? "3d" : "organic"));
   };
 
   return (
@@ -50,5 +58,11 @@ export function useBrand() {
 
 export function useBrandSafe() {
   const context = useContext(BrandContext);
-  return context ?? { iconStyle: "organic" as IconStyle, setIconStyle: () => {}, toggleIconStyle: () => {} };
+  return (
+    context ?? {
+      iconStyle: "organic" as IconStyle,
+      setIconStyle: () => {},
+      toggleIconStyle: () => {},
+    }
+  );
 }

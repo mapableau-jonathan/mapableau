@@ -1,3 +1,5 @@
+"use client";
+
 import Autoplay from "embla-carousel-autoplay";
 import useEmblaCarousel from "embla-carousel-react";
 import { motion } from "framer-motion";
@@ -9,8 +11,8 @@ import {
   Pause,
   Play,
 } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "wouter";
 
 import { useBrandSafe } from "@/app/contexts/BrandContext";
 import { modules, type MapAbleModule } from "@/app/lib/modules";

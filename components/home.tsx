@@ -1,3 +1,5 @@
+"use client";
+
 import {
   ArrowRight,
   Award,
@@ -10,7 +12,7 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
-import { Link } from "wouter";
+import Link from "next/link";
 
 import Footer from "@/components/footer";
 import { Badge } from "@/components/ui/badge";
