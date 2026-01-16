@@ -1,0 +1,10 @@
+node_modules
+.next
+out
+build
+dist
+*.config.js
+*.config.ts
+tsconfig.tsbuildinfo
+pnpm-lock.yaml
+package-lock.json

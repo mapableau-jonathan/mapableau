@@ -1,0 +1,1128 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  PARTICIPANT
+  PROVIDER
+  PLAN_MANAGER
+  NDIA_ADMIN
+  USER
+}
+
+model User {
+  id                    String    @id @default(cuid())
+  name                  String?
+  email                 String    @unique
+  emailVerified         DateTime?
+  image                 String?
+  passwordHash          String?    // Optional for OAuth users
+  role                  UserRole  @default(USER)
+  ndisPlanId            String?
+  providerRegistrationId String?
+  // Two-Factor Authentication (TOTP)
+  twoFactorEnabled      Boolean   @default(false)
+  twoFactorSecret       String?   // Encrypted TOTP secret
+  twoFactorConfig       String?   // JSON config (algorithm, digits, period)
+  twoFactorBackupCodes  String?   // Comma-separated hashed backup codes
+  // WebAuthn Biometric Authentication
+  webauthnChallenge     String?   // Temporary challenge storage (JSON)
+  webauthnCredentials   WebAuthnCredential[]
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  accounts              Account[]
+  sessions              Session[]
+  worker                Worker?
+  ndisPlan              NDISPlan? @relation("PlanParticipant", fields: [ndisPlanId], references: [id])
+  providerRegistration  ProviderRegistration? @relation(fields: [providerRegistrationId], references: [id])
+  participantPayments   PaymentTransaction[] @relation("ParticipantPayments")
+  providerPayments      PaymentTransaction[] @relation("ProviderPayments")
+  providerRedemptions   RedemptionRequest[]
+  managedPlans          NDISPlan[] @relation("PlanManager")
+  policyAssignments     PolicyAssignment[]
+  policyAcknowledgments PolicyAcknowledgment[]
+  participantIncidents  Incident[] @relation("ParticipantIncidents")
+  participantComplaints Complaint[] @relation("ParticipantComplaints")
+  participantRisks      Risk[] @relation("ParticipantRisks")
+  participantCarePlans  CarePlan[] @relation("ParticipantCarePlans")
+  publisherAccount     Publisher?
+  advertiserAccount    Advertiser?
+  businessReviews      BusinessReview[] @relation("BusinessReviewer")
+  adCampaigns          AdCampaign[] @relation("CampaignOwner")
+  businesses           Business[] @relation("BusinessOwner")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum VerificationType {
+  IDENTITY
+  VEVO
+  WWCC
+  NDIS
+  FIRST_AID
+}
+
+enum VerificationStatus {
+  PENDING
+  IN_PROGRESS
+  VERIFIED
+  FAILED
+  EXPIRED
+  SUSPENDED
+}
+
+enum WorkerStatus {
+  PENDING_ONBOARDING
+  ONBOARDING_IN_PROGRESS
+  VERIFIED
+  SUSPENDED
+  REJECTED
+}
+
+enum OnboardingStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+model Worker {
+  id              String            @id @default(cuid())
+  userId          String             @unique
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role            String?
+  status          WorkerStatus       @default(PENDING_ONBOARDING)
+  onboardingStatus OnboardingStatus  @default(NOT_STARTED)
+  employerId      String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  verifications   VerificationRecord[]
+  alerts          VerificationAlert[]
+  incidents       Incident[]
+  complaints      Complaint[]
+  trainingRecords TrainingRecord[]
+  carePlans       CarePlan[]
+  careNotes       CareNote[]
+  paymentTransactions PaymentTransaction[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([employerId])
+}
+
+model VerificationRecord {
+  id              String            @id @default(cuid())
+  workerId        String
+  worker          Worker             @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  verificationType VerificationType
+  status          VerificationStatus @default(PENDING)
+  provider        String
+  providerRequestId String?          // External provider's request/transaction ID
+  providerResponse Json?             // Full provider response stored as JSON
+  expiresAt       DateTime?
+  verifiedAt      DateTime?
+  metadata        Json?              // Additional metadata
+  errorMessage    String?            @db.Text
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  documents       VerificationDocument[]
+  alerts          VerificationAlert[]
+
+  @@unique([workerId, verificationType])
+  @@index([workerId])
+  @@index([verificationType])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model VerificationDocument {
+  id                  String             @id @default(cuid())
+  verificationRecordId String
+  verificationRecord   VerificationRecord @relation(fields: [verificationRecordId], references: [id], onDelete: Cascade)
+  documentType        String             // e.g., "drivers_licence_front", "passport", "first_aid_certificate"
+  fileUrl             String             // URL to stored document (S3, etc.)
+  fileName            String?
+  fileSize            Int?
+  mimeType            String?
+  metadata            Json?              // OCR data, extracted fields, etc.
+  uploadedAt          DateTime           @default(now())
+
+  @@index([verificationRecordId])
+  @@index([documentType])
+}
+
+enum AlertType {
+  VERIFICATION_EXPIRING_90_DAYS
+  VERIFICATION_EXPIRING_60_DAYS
+  VERIFICATION_EXPIRING_30_DAYS
+  VERIFICATION_EXPIRED
+  VERIFICATION_FAILED
+  STATUS_CHANGED
+  RENEWAL_REQUIRED
+}
+
+model VerificationAlert {
+  id                  String             @id @default(cuid())
+  workerId            String
+  worker              Worker             @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  verificationRecordId String?
+  verificationRecord   VerificationRecord? @relation(fields: [verificationRecordId], references: [id], onDelete: Cascade)
+  alertType           AlertType
+  message             String?            @db.Text
+  sentAt              DateTime?
+  acknowledgedAt      DateTime?
+  acknowledgedBy      String?
+  createdAt           DateTime           @default(now())
+
+  @@index([workerId])
+  @@index([verificationRecordId])
+  @@index([alertType])
+  @@index([sentAt])
+}
+
+// AbilityPay Protocol Models
+
+enum NDISPlanStatus {
+  DRAFT
+  ACTIVE
+  SUSPENDED
+  EXPIRED
+  CANCELLED
+}
+
+enum TokenVoucherStatus {
+  MINTED
+  ACTIVE
+  SPENT
+  EXPIRED
+  REVOKED
+}
+
+enum PaymentTransactionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REVERSED
+}
+
+enum RedemptionRequestStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum ProviderRegistrationStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  EXPIRED
+  REVOKED
+}
+
+model NDISPlan {
+  id              String          @id @default(cuid())
+  participantId   String          @unique
+  participant     User            @relation("PlanParticipant", fields: [participantId], references: [id], onDelete: Cascade)
+  planNumber      String          @unique
+  status          NDISPlanStatus  @default(DRAFT)
+  startDate       DateTime
+  endDate         DateTime
+  totalBudget     Decimal         @db.Decimal(12, 2) // AUD
+  remainingBudget Decimal         @db.Decimal(12, 2) // AUD
+  planManagerId   String?
+  planManager     User?           @relation("PlanManager", fields: [planManagerId], references: [id])
+  metadata        Json?           // Plan details, categories, etc.
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  categories      BudgetCategory[]
+  tokens          TokenVoucher[]
+  payments        PaymentTransaction[]
+
+  @@index([participantId])
+  @@index([planNumber])
+  @@index([status])
+  @@index([startDate])
+  @@index([endDate])
+}
+
+model BudgetCategory {
+  id              String          @id @default(cuid())
+  planId          String
+  plan            NDISPlan        @relation(fields: [planId], references: [id], onDelete: Cascade)
+  categoryCode    String          // NDIS support category code
+  allocatedAmount Decimal         @db.Decimal(12, 2) // AUD
+  spentAmount     Decimal         @default(0) @db.Decimal(12, 2) // AUD
+  remainingAmount Decimal         @db.Decimal(12, 2) // AUD
+  rules           Json?           // Spending constraints, provider restrictions
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  tokens          TokenVoucher[]
+
+  @@unique([planId, categoryCode])
+  @@index([planId])
+  @@index([categoryCode])
+}
+
+model TokenVoucher {
+  id                String              @id @default(cuid())
+  categoryId        String
+  category          BudgetCategory      @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  planId            String
+  plan              NDISPlan            @relation(fields: [planId], references: [id], onDelete: Cascade)
+  tokenId           String?             // Blockchain token identifier
+  amount            Decimal             @db.Decimal(12, 2) // AUD equivalent
+  status            TokenVoucherStatus  @default(MINTED)
+  mintedAt          DateTime            @default(now())
+  expiresAt         DateTime?
+  spentAt           DateTime?
+  blockchainTxHash  String?
+  blockchainAddress String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  payments          PaymentTransaction[]
+
+  @@index([categoryId])
+  @@index([planId])
+  @@index([tokenId])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model PaymentTransaction {
+  id                String                  @id @default(cuid())
+  planId            String
+  plan              NDISPlan                @relation(fields: [planId], references: [id], onDelete: Cascade)
+  participantId     String
+  participant       User                    @relation("ParticipantPayments", fields: [participantId], references: [id], onDelete: Cascade)
+  providerId        String
+  provider          User                    @relation("ProviderPayments", fields: [providerId], references: [id], onDelete: Cascade)
+  workerId          String?                 // Optional: worker involved in service delivery
+  worker            Worker?                 @relation(fields: [workerId], references: [id])
+  voucherId         String?
+  voucher           TokenVoucher?           @relation(fields: [voucherId], references: [id])
+  serviceCode       String                  // NDIS service code
+  serviceDescription String?                @db.Text
+  amount            Decimal                 @db.Decimal(12, 2) // AUD
+  status            PaymentTransactionStatus @default(PENDING)
+  blockchainTxHash  String?
+  validationResult  Json?                   // Validation details
+  createdAt         DateTime                @default(now())
+  completedAt       DateTime?
+  redemptions       RedemptionRequest[]
+
+  @@index([planId])
+  @@index([participantId])
+  @@index([providerId])
+  @@index([workerId])
+  @@index([voucherId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model RedemptionRequest {
+  id                String                    @id @default(cuid())
+  providerId        String
+  provider          User                      @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  transactionIds    String[]                  // Array of PaymentTransaction IDs
+  transactions      PaymentTransaction[]
+  totalAmount       Decimal                   @db.Decimal(12, 2) // AUD
+  status            RedemptionRequestStatus    @default(PENDING)
+  nppTransactionId  String?
+  bankAccountDetails Json?                     // Encrypted JSON with bank account details
+  requestedAt       DateTime                  @default(now())
+  settledAt         DateTime?
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+
+  @@index([providerId])
+  @@index([status])
+  @@index([requestedAt])
+}
+
+model ProviderRegistration {
+  id                String                      @id @default(cuid())
+  userId            String                      @unique
+  user              User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  providerNumber    String                      @unique
+  registrationStatus ProviderRegistrationStatus  @default(PENDING)
+  serviceCategories String[]                   // Array of service category codes
+  priceGuideVersion String?
+  verifiedAt        DateTime?
+  expiresAt         DateTime?
+  createdAt         DateTime                    @default(now())
+  updatedAt         DateTime                    @updatedAt
+
+  @@index([userId])
+  @@index([providerNumber])
+  @@index([registrationStatus])
+  @@index([expiresAt])
+}
+
+// Compliance & Policy Management Models
+
+enum PolicyStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+  UNDER_REVIEW
+}
+
+enum PolicyCategory {
+  CORE
+  CARE
+  TRANSPORT
+  WORKFORCE
+  PRIVACY
+  WHS
+  OTHER
+}
+
+model Policy {
+  id            String            @id @default(cuid())
+  title         String
+  category      PolicyCategory
+  version       String
+  content       Json              // Policy content (structured)
+  status        PolicyStatus      @default(DRAFT)
+  effectiveDate DateTime
+  reviewDate    DateTime?
+  nextReviewDate DateTime?
+  createdBy     String
+  approvedBy    String?
+  approvedAt    DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  acknowledgments PolicyAcknowledgment[]
+  assignedUsers PolicyAssignment[]
+
+  @@index([category])
+  @@index([status])
+  @@index([effectiveDate])
+}
+
+model PolicyAssignment {
+  id        String   @id @default(cuid())
+  policyId  String
+  policy    Policy   @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedAt DateTime @default(now())
+  assignedBy String
+
+  @@unique([policyId, userId])
+  @@index([userId])
+  @@index([policyId])
+}
+
+model PolicyAcknowledgment {
+  id            String   @id @default(cuid())
+  policyId      String
+  policy        Policy   @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  acknowledgedAt DateTime @default(now())
+  signature     String?  // Digital signature or consent record
+  ipAddress     String?
+  userAgent     String?
+
+  @@unique([policyId, userId])
+  @@index([userId])
+  @@index([policyId])
+  @@index([acknowledgedAt])
+}
+
+enum IncidentType {
+  SERIOUS_INCIDENT
+  REPORTABLE_INCIDENT
+  NEAR_MISS
+  MINOR_INCIDENT
+  OTHER
+}
+
+enum IncidentStatus {
+  REPORTED
+  UNDER_INVESTIGATION
+  RESOLVED
+  CLOSED
+  NDIS_REPORTED
+}
+
+model Incident {
+  id              String        @id @default(cuid())
+  incidentType    IncidentType
+  description     String        @db.Text
+  occurredAt      DateTime
+  reportedAt      DateTime      @default(now())
+  reportedBy      String
+  participantId   String?
+  participant     User?         @relation("ParticipantIncidents", fields: [participantId], references: [id])
+  workerId        String?
+  worker          Worker?       @relation(fields: [workerId], references: [id])
+  location        String?
+  status          IncidentStatus @default(REPORTED)
+  ndisReported    Boolean       @default(false)
+  ndisReportNumber String?
+  ndisReportedAt  DateTime?
+  actionsTaken    Json?         // Array of actions
+  resolution      String?       @db.Text
+  resolvedAt      DateTime?
+  resolvedBy     String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([incidentType])
+  @@index([status])
+  @@index([occurredAt])
+  @@index([participantId])
+  @@index([workerId])
+  @@index([reportedAt])
+}
+
+enum ComplaintStatus {
+  RECEIVED
+  ACKNOWLEDGED
+  UNDER_INVESTIGATION
+  RESOLVED
+  CLOSED
+  ESCALATED
+}
+
+enum ComplaintSource {
+  PARTICIPANT
+  FAMILY
+  WORKER
+  ANONYMOUS
+  OTHER
+}
+
+model Complaint {
+  id              String          @id @default(cuid())
+  complaintNumber String          @unique
+  source          ComplaintSource
+  description     String          @db.Text
+  participantId   String?
+  participant     User?           @relation("ParticipantComplaints", fields: [participantId], references: [id])
+  workerId        String?
+  worker          Worker?         @relation(fields: [workerId], references: [id])
+  serviceArea     String?         // Care, Transport, etc.
+  status          ComplaintStatus  @default(RECEIVED)
+  receivedAt      DateTime        @default(now())
+  acknowledgedAt  DateTime?
+  acknowledgedBy  String?
+  resolution      String?         @db.Text
+  resolvedAt      DateTime?
+  resolvedBy     String?
+  satisfactionRating Int?         // 1-5 rating
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  resolutions     ComplaintResolution[]
+
+  @@index([status])
+  @@index([source])
+  @@index([receivedAt])
+  @@index([participantId])
+}
+
+model ComplaintResolution {
+  id          String    @id @default(cuid())
+  complaintId String
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  action      String    @db.Text
+  takenBy     String
+  takenAt     DateTime  @default(now())
+  outcome     String?   @db.Text
+
+  @@index([complaintId])
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum RiskStatus {
+  IDENTIFIED
+  ASSESSED
+  MITIGATED
+  MONITORED
+  CLOSED
+}
+
+model Risk {
+  id              String      @id @default(cuid())
+  title           String
+  description     String      @db.Text
+  riskLevel       RiskLevel
+  status          RiskStatus  @default(IDENTIFIED)
+  category        String      // Operational, Financial, Compliance, etc.
+  identifiedBy    String
+  identifiedAt    DateTime    @default(now())
+  owner           String?     // Risk owner
+  mitigationPlan String?     @db.Text
+  mitigationDate DateTime?
+  reviewDate      DateTime?
+  participantId   String?
+  participant     User?       @relation("ParticipantRisks", fields: [participantId], references: [id])
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  mitigations     RiskMitigation[]
+
+  @@index([riskLevel])
+  @@index([status])
+  @@index([category])
+  @@index([participantId])
+}
+
+model RiskMitigation {
+  id          String    @id @default(cuid())
+  riskId      String
+  risk        Risk      @relation(fields: [riskId], references: [id], onDelete: Cascade)
+  action      String    @db.Text
+  responsible String
+  dueDate     DateTime
+  completedAt DateTime?
+  status      String    // Planned, In Progress, Completed
+  createdAt   DateTime  @default(now())
+
+  @@index([riskId])
+}
+
+model TrainingRecord {
+  id              String    @id @default(cuid())
+  workerId        String
+  worker          Worker     @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  trainingType    String     // Induction, Mandatory, Skills, etc.
+  trainingName    String
+  provider        String?   // Training provider
+  completedAt     DateTime
+  expiryDate      DateTime?
+  certificateNumber String?
+  competencyLevel String?   // Beginner, Intermediate, Advanced, Expert
+  notes           String?   @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([workerId])
+  @@index([trainingType])
+  @@index([expiryDate])
+}
+
+model CarePlan {
+  id            String        @id @default(cuid())
+  participantId String
+  participant   User          @relation("ParticipantCarePlans", fields: [participantId], references: [id], onDelete: Cascade)
+  workerId      String?
+  worker        Worker?       @relation(fields: [workerId], references: [id])
+  planName      String
+  goals         Json          // Array of goals with tracking
+  services      Json          // Service allocations
+  startDate     DateTime
+  reviewDate    DateTime
+  status        String        // Active, Completed, On Hold
+  notes         CareNote[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([participantId])
+  @@index([workerId])
+  @@index([status])
+}
+
+enum CareNoteType {
+  PROGRESS
+  INCIDENT
+  MEDICATION
+  PERSONAL_CARE
+  ACTIVITY
+  OTHER
+}
+
+model CareNote {
+  id          String        @id @default(cuid())
+  carePlanId  String
+  carePlan    CarePlan      @relation(fields: [carePlanId], references: [id], onDelete: Cascade)
+  workerId    String
+  worker      Worker        @relation(fields: [workerId], references: [id])
+  noteType    CareNoteType
+  content     String        @db.Text
+  metadata    Json?         // Additional structured data
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([carePlanId])
+  @@index([workerId])
+  @@index([noteType])
+  @@index([createdAt])
+}
+
+// Advertising & Commerce Models
+
+enum PublisherStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum AdvertiserStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum AdFormat {
+  BANNER
+  SPONSORED_MARKER
+  POPUP
+  SIDEBAR
+  SEARCH_RESULT
+}
+
+enum AdUnitStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum BiddingStrategy {
+  CPC
+  CPM
+  CPA
+  TARGET_CPA
+  MAXIMIZE_CONVERSIONS
+}
+
+enum AdRotation {
+  OPTIMIZE
+  ROTATE
+  SEQUENCE
+}
+
+enum AuctionType {
+  FIRST_PRICE
+  SECOND_PRICE
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum BusinessCategory {
+  RESTAURANT
+  RETAIL
+  HEALTHCARE
+  TRANSPORT
+  ACCOMMODATION
+  ENTERTAINMENT
+  SERVICES
+  ACCESSIBLE_VENUE
+  NDIS_PROVIDER
+  OTHER
+}
+
+enum BusinessStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum AdvertisementType {
+  BANNER
+  SPONSORED_MARKER
+  POPUP
+  SIDEBAR
+  SEARCH_RESULT
+}
+
+enum AdvertisementStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  EXPIRED
+  ARCHIVED
+}
+
+enum AdCampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+model Publisher {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation("PublisherAccount", fields: [userId], references: [id], onDelete: Cascade)
+  publisherCode   String   @unique // Unique code for ad placement
+  status          PublisherStatus @default(PENDING)
+  revenueShare    Decimal  @default(0.70) @db.Decimal(5, 4) // 70% default
+  totalEarnings   Decimal  @default(0) @db.Decimal(12, 2)
+  paidEarnings    Decimal  @default(0) @db.Decimal(12, 2)
+  paymentThreshold Decimal @default(100) @db.Decimal(10, 2) // Minimum payout
+  paymentMethod   String?  // bank, paypal, etc.
+  paymentDetails  Json?    // Encrypted payment info
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  adUnits         AdUnit[]
+  payments        PublisherPayment[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([publisherCode])
+}
+
+model Advertiser {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation("AdvertiserAccount", fields: [userId], references: [id], onDelete: Cascade)
+  businessId      String?  // Link to Business model
+  status          AdvertiserStatus @default(PENDING)
+  creditLimit     Decimal  @db.Decimal(10, 2)
+  balance         Decimal  @default(0) @db.Decimal(10, 2)
+  totalSpent      Decimal  @default(0) @db.Decimal(12, 2)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  campaigns       AdCampaign[]
+  payments        AdvertiserPayment[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([businessId])
+}
+
+model AdUnit {
+  id              String   @id @default(cuid())
+  publisherId     String
+  publisher       Publisher @relation(fields: [publisherId], references: [id], onDelete: Cascade)
+  name            String
+  code            String   @unique // Ad unit code for embedding
+  format          AdFormat
+  size            String   // "300x250", "728x90", etc.
+  status          AdUnitStatus @default(ACTIVE)
+  location        Json?    // Where on map/page it appears
+  targetingRules  Json?    // Contextual targeting rules
+  impressions     Int      @default(0)
+  clicks          Int      @default(0)
+  revenue         Decimal  @default(0) @db.Decimal(12, 4)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  adRequests      AdRequest[]
+
+  @@index([publisherId])
+  @@index([status])
+  @@index([code])
+}
+
+model AdRequest {
+  id              String   @id @default(cuid())
+  adUnitId        String
+  adUnit          AdUnit   @relation(fields: [adUnitId], references: [id], onDelete: Cascade)
+  requestId      String   @unique // Unique request identifier
+  timestamp       DateTime @default(now())
+  
+  // Context
+  userAgent       String?
+  ipAddress       String?
+  userId          String?
+  location        Json?    // User location
+  pageContext     Json?    // Page/map context
+  keywords        String[] // Extracted keywords
+  
+  // Auction result
+  winningAdId    String?
+  winningAd      Advertisement? @relation(fields: [winningAdId], references: [id])
+  winningBid     Decimal?        @db.Decimal(10, 4)
+  auctionType    AuctionType     @default(FIRST_PRICE)
+  eligibleAds    String[]        // Ad IDs that participated
+  
+  // Performance
+  served         Boolean   @default(false)
+  clicked        Boolean   @default(false)
+  converted      Boolean   @default(false)
+  
+  @@index([adUnitId])
+  @@index([timestamp])
+  @@index([userId])
+  @@index([requestId])
+}
+
+model PublisherPayment {
+  id              String   @id @default(cuid())
+  publisherId     String
+  publisher       Publisher @relation(fields: [publisherId], references: [id], onDelete: Cascade)
+  amount          Decimal  @db.Decimal(10, 2)
+  periodStart     DateTime
+  periodEnd       DateTime
+  status          PaymentStatus @default(PENDING)
+  paymentMethod   String
+  transactionId   String?
+  paidAt          DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([publisherId])
+  @@index([status])
+  @@index([periodStart, periodEnd])
+}
+
+model AdvertiserPayment {
+  id              String   @id @default(cuid())
+  advertiserId    String
+  advertiser      Advertiser @relation(fields: [advertiserId], references: [id], onDelete: Cascade)
+  amount          Decimal  @db.Decimal(10, 2)
+  paymentMethod   String
+  transactionId   String?
+  invoiceNumber   String?
+  status          PaymentStatus @default(PENDING)
+  paidAt          DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([advertiserId])
+  @@index([status])
+}
+
+model Business {
+  id                String            @id @default(cuid())
+  name              String
+  description       String?           @db.Text
+  category          BusinessCategory
+  status            BusinessStatus    @default(PENDING)
+  
+  // Location
+  address           String
+  city              String
+  state             String
+  postcode          String
+  country           String            @default("Australia")
+  latitude          Float
+  longitude         Float
+  
+  // Contact
+  phone             String?
+  email             String?
+  website           String?
+  
+  // Business details
+  ownerId           String
+  owner             User              @relation("BusinessOwner", fields: [ownerId], references: [id])
+  logoUrl           String?
+  imageUrls         String[]          // Array of image URLs
+  openingHours      Json?             // Structured opening hours
+  amenities         String[]          // e.g., ["wheelchair_accessible", "parking", "wifi"]
+  accessibility     Json?             // Detailed accessibility info
+  
+  // Commerce
+  priceRange        String?           // e.g., "$", "$$", "$$$"
+  acceptsNDIS       Boolean           @default(false)
+  ndisProviderNumber String?
+  
+  // SEO & Discovery
+  tags              String[]
+  keywords          String[]
+  
+  // Verification
+  verified          Boolean           @default(false)
+  verifiedAt        DateTime?
+  
+  // Analytics
+  viewCount         Int               @default(0)
+  clickCount        Int               @default(0)
+  lastViewedAt      DateTime?
+  
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  
+  advertisements    Advertisement[]
+  reviews           BusinessReview[]
+  
+  @@index([category])
+  @@index([status])
+  @@index([latitude, longitude])
+  @@index([ownerId])
+  @@index([verified])
+  @@index([acceptsNDIS])
+}
+
+model BusinessReview {
+  id          String    @id @default(cuid())
+  businessId  String
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation("BusinessReviewer", fields: [userId], references: [id])
+  rating      Int       // 1-5
+  comment     String?   @db.Text
+  verified    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@index([businessId])
+  @@index([userId])
+}
+
+model Advertisement {
+  id              String            @id @default(cuid())
+  businessId      String
+  business        Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  campaignId      String?
+  campaign        AdCampaign?       @relation(fields: [campaignId], references: [id])
+  
+  type            AdvertisementType
+  status          AdvertisementStatus @default(DRAFT)
+  
+  // Content
+  title           String
+  description     String?           @db.Text
+  imageUrl        String?
+  linkUrl         String?
+  callToAction    String?           // e.g., "Learn More", "Book Now"
+  
+  // Targeting
+  targetLocation  Json?             // GeoJSON polygon or point with radius
+  targetCategory  BusinessCategory?
+  targetKeywords  String[]
+  
+  // Display settings
+  priority        Int               @default(0) // Higher = shown first
+  maxImpressions  Int?              // Total impressions limit
+  maxClicks       Int?              // Total clicks limit
+  currentImpressions Int            @default(0)
+  currentClicks   Int               @default(0)
+  
+  // Scheduling
+  startDate       DateTime?
+  endDate         DateTime?
+  
+  // Pricing
+  costPerImpression Decimal?        @db.Decimal(10, 4)
+  costPerClick     Decimal?         @db.Decimal(10, 4)
+  totalBudget      Decimal?         @db.Decimal(10, 2)
+  spentAmount      Decimal          @default(0) @db.Decimal(10, 2)
+  
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  adRequests      AdRequest[]
+  
+  @@index([businessId])
+  @@index([campaignId])
+  @@index([status])
+  @@index([type])
+  @@index([startDate, endDate])
+}
+
+model AdCampaign {
+  id              String            @id @default(cuid())
+  name            String
+  description     String?           @db.Text
+  status          AdCampaignStatus  @default(DRAFT)
+  
+  ownerId         String
+  owner           User              @relation("CampaignOwner", fields: [ownerId], references: [id])
+  advertiserId    String
+  advertiser      Advertiser        @relation(fields: [advertiserId], references: [id], onDelete: Cascade)
+  
+  // DoubleClick-style features
+  biddingStrategy BiddingStrategy @default(CPC)
+  maxBid          Decimal?         @db.Decimal(10, 4) // Max bid per click/impression
+  qualityScore    Decimal?         @db.Decimal(5, 2) // Ad quality metric
+  adRotation      AdRotation       @default(OPTIMIZE) // OPTIMIZE, ROTATE, SEQUENCE
+  frequencyCapping Int?             // Max impressions per user per day
+  dayParting      Json?             // Schedule ads by time of day
+  deviceTargeting String[]          // mobile, desktop, tablet
+  geoTargeting    Json?             // Geographic targeting rules
+  contextualTargeting Json?         // Keyword/content targeting
+  audienceTargeting Json?           // Demographic/behavioral targeting
+  conversionTracking Json?          // Conversion goals and pixels
+  
+  // Budget
+  totalBudget     Decimal           @db.Decimal(10, 2)
+  spentAmount     Decimal           @default(0) @db.Decimal(10, 2)
+  dailyBudget     Decimal?          @db.Decimal(10, 2)
+  
+  // Targeting
+  targetLocations Json?             // Array of geo-targeting areas
+  targetCategories BusinessCategory[]
+  targetKeywords  String[]
+  
+  // Scheduling
+  startDate       DateTime
+  endDate         DateTime?
+  
+  // Analytics
+  totalImpressions Int              @default(0)
+  totalClicks      Int              @default(0)
+  totalConversions Int              @default(0)
+  
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  
+  advertisements  Advertisement[]
+  
+  @@index([ownerId])
+  @@index([advertiserId])
+  @@index([status])
+  @@index([startDate, endDate])
+}
+
+// WebAuthn Biometric Authentication
+model WebAuthnCredential {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  credentialId  String   @unique // Base64 encoded credential ID
+  publicKey     String   @db.Text // Public key or attestation object
+  counter       Int      @default(0) // Signature counter
+  deviceName    String?  // User-friendly device name
+  createdAt     DateTime  @default(now())
+  lastUsedAt    DateTime?
+
+  @@index([userId])
+  @@index([credentialId])
+}
