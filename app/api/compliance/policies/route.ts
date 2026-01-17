@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { PolicyService } from "@/lib/services/compliance/policy-service";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { requireAdmin, requirePlanManager, requireAuth } from "@/lib/security/authorization-utils";
 import type { PolicyCategory, PolicyStatus } from "@prisma/client";
 
 const createPolicySchema = z.object({
@@ -68,8 +69,16 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    // SECURITY: Require admin or plan manager role to create policies
+    try {
+      await requireAdmin();
+    } catch {
+      // If not admin, try plan manager
+      await requirePlanManager();
+    }
+
+    const user = await requireAuth();
+    if (!user) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
@@ -82,12 +91,26 @@ export async function POST(req: Request) {
     const service = new PolicyService();
     const policy = await service.createPolicy({
       ...data,
-      createdBy: session.user.id,
+      createdBy: user.id,
     });
 
     return NextResponse.json(policy, { status: 201 });
   } catch (error) {
     console.error("Error creating policy:", error);
+
+    if (error instanceof Error && error.message.includes("Unauthorized")) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    if (error instanceof Error && error.message.includes("Forbidden")) {
+      return NextResponse.json(
+        { error: "Forbidden: Admin or Plan Manager access required" },
+        { status: 403 }
+      );
+    }
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(

@@ -1,0 +1,18 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		{
+			"path": "../../../Business Plans"
+		},
+		{
+			"path": "../../../MapAble_NDIS_Verification_AuditPack_Template_v1/MapAble_NDIS_Verification_AuditPack_Template_v1"
+		}
+	],
+	"settings": {
+		"files.readonlyInclude": {
+			"{**/.c4z/.extsrcs/*.PROTSYM.cbl,**/.c4z/.extsrcs/*.PROTSYM.listing}": true
+		}
+	}
+}
