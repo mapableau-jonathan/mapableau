@@ -3,21 +3,35 @@
 import { signIn } from "next-auth/react";
 import { Facebook } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
 interface SocialLoginButtonsProps {
   callbackUrl?: string;
   isLoading?: boolean;
+  serviceId?: "mapable" | "accessibooks" | "disapedia" | "mediawiki" | "cursor-replit";
 }
 
-export function SocialLoginButtons({
+function SocialLoginButtonsContent({
   callbackUrl = "/dashboard",
   isLoading = false,
+  serviceId = "mapable",
 }: SocialLoginButtonsProps) {
-  const handleSocialLogin = async (provider: string) => {
-    await signIn(provider, {
-      callbackUrl,
-      redirect: true,
-    });
+  const searchParams = useSearchParams();
+  const serviceIdFromUrl = searchParams.get("serviceId") as SocialLoginButtonsProps["serviceId"];
+  const finalServiceId = serviceIdFromUrl || serviceId;
+
+  const handleSocialLogin = async (provider: "google" | "facebook" | "microsoft" | "wix") => {
+    // Use new identity provider endpoint
+    const baseUrl = window.location.origin;
+    const authUrl = new URL(`/api/auth/identity-provider/${provider}`, baseUrl);
+    authUrl.searchParams.set("serviceId", finalServiceId);
+    if (callbackUrl) {
+      authUrl.searchParams.set("callbackUrl", callbackUrl);
+    }
+
+    // Redirect to identity provider
+    window.location.href = authUrl.toString();
   };
 
   return (
@@ -33,7 +47,7 @@ export function SocialLoginButtons({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <Button
           type="button"
           variant="outline"
@@ -71,7 +85,7 @@ export function SocialLoginButtons({
         <Button
           type="button"
           variant="outline"
-          onClick={() => handleSocialLogin("azure-ad")}
+          onClick={() => handleSocialLogin("microsoft")}
           disabled={isLoading}
           className="w-full"
           aria-label="Sign in with Microsoft"
@@ -89,7 +103,27 @@ export function SocialLoginButtons({
           </svg>
           <span className="sr-only">Microsoft</span>
         </Button>
+
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => handleSocialLogin("wix")}
+          disabled={isLoading}
+          className="w-full"
+          aria-label="Sign in with Wix"
+        >
+          <span className="text-sm font-semibold">Wix</span>
+          <span className="sr-only">Wix</span>
+        </Button>
       </div>
     </div>
+  );
+}
+
+export function SocialLoginButtons(props: SocialLoginButtonsProps) {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <SocialLoginButtonsContent {...props} />
+    </Suspense>
   );
 }

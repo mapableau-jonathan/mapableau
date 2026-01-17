@@ -21,6 +21,22 @@ const envSchema = z.object({
   AZURE_AD_CLIENT_ID: z.string().optional(),
   AZURE_AD_CLIENT_SECRET: z.string().optional(),
   AZURE_AD_TENANT_ID: z.string().optional(),
+  WIX_CLIENT_ID: z.string().optional(),
+  WIX_CLIENT_SECRET: z.string().optional(),
+  WIX_APP_ID: z.string().optional(),
+  
+  // Identity Provider Domain (ad.org.au or ad.id)
+  AD_ID_DOMAIN: z.string().url().optional(),
+  
+  // Service Callback URLs (Australian domains)
+  MAPABLE_CALLBACK_URL: z.string().url().optional(), // Default: https://mapable.com.au/auth/callback
+  ACCESSIBOOKS_CALLBACK_URL: z.string().url().optional(), // Default: https://accessibooks.com.au/auth/callback
+  DISAPEDIA_CALLBACK_URL: z.string().url().optional(), // Default: https://disapedia.au/auth/callback
+  MEDIAWIKI_CALLBACK_URL: z.string().url().optional(),
+  CURSOR_REPLIT_CALLBACK_URL: z.string().url().optional(),
+  
+  // Data Encryption
+  DATA_ENCRYPTION_KEY: z.string().optional(),
 
   // Blockchain (optional)
   BLOCKCHAIN_PROVIDER: z.enum(["ethereum", "hyperledger", "polygon", "mock"]).optional(),
@@ -42,6 +58,35 @@ const envSchema = z.object({
   ENABLE_WWCC: z.string().optional(),
   ENABLE_NDIS: z.string().optional(),
   ENABLE_FIRST_AID: z.string().optional(),
+
+  // JWT Configuration (optional, defaults to NEXTAUTH_SECRET)
+  JWT_SECRET: z.string().optional(),
+  JWT_REFRESH_SECRET: z.string().optional(),
+  JWT_ISSUER: z.string().optional(),
+  JWT_AUDIENCE: z.string().optional(),
+  JWT_EXPIRES_IN: z.string().optional(),
+  JWT_REFRESH_EXPIRES_IN: z.string().optional(),
+
+  // OAuth2 SSO Configuration (optional)
+  OAUTH2_CLIENT_ID: z.string().optional(),
+  OAUTH2_CLIENT_SECRET: z.string().optional(),
+  OAUTH2_AUTHORIZATION_URL: z.string().url().optional(),
+  OAUTH2_TOKEN_URL: z.string().url().optional(),
+  OAUTH2_CALLBACK_URL: z.string().url().optional(),
+  OAUTH2_SCOPE: z.string().optional(),
+
+  // SAML SSO Configuration (optional)
+  SAML_ENTRY_POINT: z.string().url().optional(),
+  SAML_ISSUER: z.string().optional(),
+  SAML_CALLBACK_URL: z.string().url().optional(),
+  SAML_CERT: z.string().optional(),
+  SAML_IDENTIFIER_FORMAT: z.string().optional(),
+  SAML_SIGNATURE_ALGORITHM: z.string().optional(),
+  SAML_WANT_ASSERTIONS_SIGNED: z.string().optional(),
+  SAML_WANT_MESSAGE_SIGNED: z.string().optional(),
+
+  // OAuth2 User Info (optional)
+  OAUTH2_USERINFO_URL: z.string().url().optional(),
 });
 
 type Env = z.infer<typeof envSchema>;
