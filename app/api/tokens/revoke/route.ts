@@ -4,17 +4,19 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { tokenIssuanceService } from "@/lib/services/auth/token-issuance-service";
-import { serviceRegistry, type ServiceId } from "@/lib/services/auth/service-registry";
+import { revokeToken } from "@/lib/services/auth/token-issuance-service";
+import { serviceRegistry, ServiceId } from "@/lib/services/auth/service-registry";
 import { logger } from "@/lib/logger";
 
+/**
+ * POST /api/tokens/revoke
+ * Revoke token
+ */
 export async function POST(request: NextRequest) {
   try {
-    // Parse request body
     const body = await request.json();
     const { tokenId, serviceId } = body;
 
-    // Validate required fields
     if (!tokenId || !serviceId) {
       return NextResponse.json(
         { error: "tokenId and serviceId are required" },
@@ -23,59 +25,33 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate service
-    if (!serviceRegistry.isServiceEnabled(serviceId)) {
+    if (!serviceRegistry.isEnabled(serviceId as ServiceId)) {
       return NextResponse.json(
         { error: "Service not found or disabled" },
         { status: 400 }
       );
     }
 
-    // Authenticate service
-    const authHeader = request.headers.get("authorization");
-    if (!authHeader) {
-      return NextResponse.json(
-        { error: "Authorization required" },
-        { status: 401 }
-      );
-    }
-
-    // Extract service credentials
-    const parts = authHeader.replace("Service ", "").split(":");
-    if (parts.length !== 2) {
-      return NextResponse.json(
-        { error: "Invalid authorization format" },
-        { status: 401 }
-      );
-    }
-
-    const [clientId, clientSecret] = parts;
-    
-    // Validate service credentials
-    if (!serviceRegistry.validateServiceCredentials(serviceId, clientId, clientSecret)) {
-      return NextResponse.json(
-        { error: "Invalid service credentials" },
-        { status: 401 }
-      );
-    }
-
     // Revoke token
-    const success = await tokenIssuanceService.revokeToken(tokenId, serviceId);
+    const result = await revokeToken(tokenId, serviceId as ServiceId);
 
-    if (!success) {
+    if (!result.success) {
       return NextResponse.json(
-        { error: "Failed to revoke token" },
+        { error: result.error || "Token revocation failed" },
         { status: 400 }
       );
     }
 
+    logger.info("Token revoked via API", { tokenId, serviceId });
+
     return NextResponse.json({
       success: true,
-      message: "Token revoked",
+      message: "Token revoked successfully",
     });
   } catch (error) {
     logger.error("Token revocation endpoint error", error);
     return NextResponse.json(
-      { error: "Failed to revoke token" },
+      { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }
     );
   }

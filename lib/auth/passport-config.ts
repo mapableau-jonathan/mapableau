@@ -492,6 +492,127 @@ if (process.env.AZURE_AD_CLIENT_ID && process.env.AZURE_AD_CLIENT_SECRET && proc
 }
 
 /**
+ * Wix OAuth 2.0 Strategy
+ * Supports Wix OAuth for user authentication and data retrieval
+ */
+if (process.env.WIX_CLIENT_ID && process.env.WIX_CLIENT_SECRET && process.env.WIX_APP_ID) {
+  passport.use(
+    "wix",
+    new OAuth2Strategy(
+      {
+        authorizationURL: "https://www.wix.com/oauth/authorize",
+        tokenURL: "https://www.wix.com/oauth/access",
+        clientID: process.env.WIX_CLIENT_ID,
+        clientSecret: process.env.WIX_CLIENT_SECRET,
+        callbackURL: process.env.AD_ID_DOMAIN
+          ? `${process.env.AD_ID_DOMAIN}/api/auth/identity-provider/wix/callback`
+          : "/api/auth/identity-provider/wix/callback",
+        scope: "openid profile email",
+      },
+      async (accessToken, refreshToken, params, profile, done) => {
+        try {
+          // Wix OAuth profile may be in params or need to be fetched
+          // Fetch user info from Wix API
+          const wixUserResponse = await fetch("https://www.wixapis.com/members/v1/members/current", {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+
+          let wixUser: any = null;
+          if (wixUserResponse.ok) {
+            const wixData = await wixUserResponse.json();
+            wixUser = wixData.member || wixData;
+          }
+
+          const email = wixUser?.contact?.email || wixUser?.email || profile?.email || params?.email;
+          if (!email) {
+            return done(new Error("No email found in Wix profile"), null);
+          }
+
+          const wixMemberId = wixUser?.id || profile?.id || params?.user_id;
+
+          let user = await prisma.user.findUnique({
+            where: { email: email.toLowerCase() },
+            include: { accounts: true },
+          });
+
+          if (user) {
+            const account = user.accounts.find(
+              (acc) => acc.provider === "wix" && acc.providerAccountId === wixMemberId
+            );
+
+            if (!account) {
+              // Encrypt tokens before storing
+              const { encryptToken } = await import("@/lib/services/auth/wix-user-sync");
+              await prisma.account.create({
+                data: {
+                  userId: user.id,
+                  type: "oauth",
+                  provider: "wix",
+                  providerAccountId: wixMemberId,
+                  access_token: encryptToken(accessToken),
+                  refresh_token: refreshToken ? encryptToken(refreshToken) : null,
+                },
+              });
+            } else {
+              // Update tokens
+              const { encryptToken } = await import("@/lib/services/auth/wix-user-sync");
+              await prisma.account.update({
+                where: { id: account.id },
+                data: {
+                  access_token: encryptToken(accessToken),
+                  refresh_token: refreshToken ? encryptToken(refreshToken) : null,
+                },
+              });
+            }
+          } else {
+            // Create new user
+            const { encryptToken } = await import("@/lib/services/auth/wix-user-sync");
+            const name = wixUser?.contact?.firstName && wixUser?.contact?.lastName
+              ? `${wixUser.contact.firstName} ${wixUser.contact.lastName}`
+              : wixUser?.contact?.fullName || wixUser?.name || profile?.name || "User";
+            const image = wixUser?.image?.url || wixUser?.photo || profile?.imageUrl;
+
+            user = await prisma.user.create({
+              data: {
+                email: email.toLowerCase(),
+                name,
+                image,
+                emailVerified: new Date(),
+                accounts: {
+                  create: {
+                    type: "oauth",
+                    provider: "wix",
+                    providerAccountId: wixMemberId,
+                    access_token: encryptToken(accessToken),
+                    refresh_token: refreshToken ? encryptToken(refreshToken) : null,
+                  },
+                },
+              },
+              include: { accounts: true },
+            });
+          }
+
+          // Sync Wix user data
+          const { syncWixUserData } = await import("@/lib/services/auth/wix-user-sync");
+          await syncWixUserData(user.id);
+
+          return done(null, {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+            image: user.image,
+          });
+        } catch (error) {
+          logger.error("Wix Strategy error", error);
+          return done(error, null);
+        }
+      }
+    )
+  );
+}
+
+/**
  * SAML Strategy for Enterprise SSO
  * Supports SAML 2.0 for enterprise authentication
  */

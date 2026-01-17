@@ -1,222 +1,168 @@
 /**
  * Service Registry
- * Manages service configurations for AccessiBooks, Disapedia, MapAble, MediaWiki, and Cursor/Replit
+ * Centralized registry for all Australian Disability Ltd services
  */
 
-import { logger } from "@/lib/logger";
 import { getEnv } from "@/lib/config/env";
 
-export type ServiceId = "mapable" | "accessibooks" | "disapedia" | "mediawiki" | "cursor-replit";
+export type ServiceId =
+  | "mapable"
+  | "accessibooks"
+  | "disapedia"
+  | "mediawiki"
+  | "cursor-replit";
 
 export interface ServiceConfig {
-  serviceId: ServiceId;
+  id: ServiceId;
   name: string;
+  domain: string;
   callbackUrl: string;
+  clientId?: string;
+  clientSecret?: string;
   allowedScopes: string[];
-  tokenExpiration?: number; // in seconds, defaults to 3600
-  clientId?: string; // For service-to-service authentication
-  clientSecret?: string; // For service-to-service authentication
+  tokenExpiration: number; // seconds
+  requiresEmailVerification: boolean;
   enabled: boolean;
 }
 
+/**
+ * Service Registry
+ * Manages configuration for all services
+ */
 class ServiceRegistry {
   private services: Map<ServiceId, ServiceConfig> = new Map();
-  private initialized = false;
 
-  /**
-   * Initialize service registry with environment variables
-   */
-  initialize(): void {
-    if (this.initialized) {
-      return;
-    }
+  constructor() {
+    this.initializeServices();
+  }
 
+  private initializeServices(): void {
     const env = getEnv();
 
-    // MapAble - mapable.com.au
-    this.registerService({
-      serviceId: "mapable",
+    // MapAble
+    this.register({
+      id: "mapable",
       name: "MapAble",
-      callbackUrl: process.env.MAPABLE_CALLBACK_URL || "https://mapable.com.au/auth/callback",
+      domain: "mapable.com.au",
+      callbackUrl: env.MAPABLE_CALLBACK_URL || "https://mapable.com.au/auth/callback",
       allowedScopes: ["read:profile", "read:email", "read:services"],
-      tokenExpiration: 3600,
+      tokenExpiration: 3600, // 1 hour
+      requiresEmailVerification: true,
       enabled: true,
     });
 
-    // AccessiBooks - accessibooks.com.au
-    this.registerService({
-      serviceId: "accessibooks",
+    // AccessiBooks
+    this.register({
+      id: "accessibooks",
       name: "AccessiBooks",
-      callbackUrl: process.env.ACCESSIBOOKS_CALLBACK_URL || "https://accessibooks.com.au/auth/callback",
-      allowedScopes: ["read:profile", "read:email", "read:services"],
-      tokenExpiration: 3600,
+      domain: "accessibooks.com.au",
+      callbackUrl: env.ACCESSIBOOKS_CALLBACK_URL || "https://accessibooks.com.au/auth/callback",
+      allowedScopes: ["read:profile", "read:email", "read:library"],
+      tokenExpiration: 7200, // 2 hours
+      requiresEmailVerification: true,
       enabled: true,
     });
 
-    // Disapedia - disapedia.au
-    this.registerService({
-      serviceId: "disapedia",
+    // Disapedia
+    this.register({
+      id: "disapedia",
       name: "Disapedia",
-      callbackUrl: process.env.DISAPEDIA_CALLBACK_URL || "https://disapedia.au/auth/callback",
-      allowedScopes: ["read:profile", "read:email", "read:services"],
-      tokenExpiration: 3600,
+      domain: "disapedia.au",
+      callbackUrl: env.DISAPEDIA_CALLBACK_URL || "https://disapedia.au/auth/callback",
+      allowedScopes: ["read:profile", "read:email", "read:wiki"],
+      tokenExpiration: 3600, // 1 hour
+      requiresEmailVerification: true,
       enabled: true,
     });
 
     // MediaWiki
-    this.registerService({
-      serviceId: "mediawiki",
+    this.register({
+      id: "mediawiki",
       name: "MediaWiki",
-      callbackUrl: process.env.MEDIAWIKI_CALLBACK_URL || "https://wiki.example.com/auth/callback",
-      allowedScopes: ["read:profile", "read:email", "write:user"],
-      tokenExpiration: 7200, // Longer expiration for MediaWiki
+      domain: env.AD_ID_DOMAIN || "ad.id",
+      callbackUrl: env.MEDIAWIKI_CALLBACK_URL || `${env.AD_ID_DOMAIN || "https://ad.id"}/api/auth/callback/mediawiki`,
+      allowedScopes: ["read:profile", "read:email", "write:wiki"],
+      tokenExpiration: 86400, // 24 hours
+      requiresEmailVerification: false,
       enabled: true,
     });
 
-    // Cursor/Replit Applications
-    this.registerService({
-      serviceId: "cursor-replit",
-      name: "Cursor/Replit Apps",
-      callbackUrl: process.env.CURSOR_REPLIT_CALLBACK_URL || "https://apps.example.com/auth/callback",
-      allowedScopes: ["read:profile", "read:email"],
-      tokenExpiration: 1800, // Shorter expiration for apps
+    // Cursor/Replit
+    this.register({
+      id: "cursor-replit",
+      name: "Cursor/Replit",
+      domain: env.AD_ID_DOMAIN || "ad.id",
+      callbackUrl: env.CURSOR_REPLIT_CALLBACK_URL || `${env.AD_ID_DOMAIN || "https://ad.id"}/api/auth/callback/cursor-replit`,
+      allowedScopes: ["read:profile", "read:email", "read:code"],
+      tokenExpiration: 1800, // 30 minutes
+      requiresEmailVerification: false,
       enabled: true,
     });
-
-    this.initialized = true;
-    logger.info("Service registry initialized", { serviceCount: this.services.size });
   }
 
   /**
-   * Register a service configuration
+   * Register a service
    */
-  registerService(config: ServiceConfig): void {
-    this.services.set(config.serviceId, config);
-    logger.debug("Service registered", { serviceId: config.serviceId, name: config.name });
+  register(config: ServiceConfig): void {
+    this.services.set(config.id, config);
   }
 
   /**
    * Get service configuration
    */
-  getServiceConfig(serviceId: ServiceId): ServiceConfig | null {
-    if (!this.initialized) {
-      this.initialize();
-    }
-
-    return this.services.get(serviceId) || null;
+  get(serviceId: ServiceId): ServiceConfig | undefined {
+    return this.services.get(serviceId);
   }
 
   /**
-   * Validate service callback URL
-   * Supports exact match and domain-based validation for security
+   * Check if service exists and is enabled
    */
-  validateServiceCallback(serviceId: ServiceId, callbackUrl: string): boolean {
-    const config = this.getServiceConfig(serviceId);
-    if (!config) {
-      return false;
-    }
-
-    // Allow exact match
-    if (callbackUrl === config.callbackUrl) {
-      return true;
-    }
-
-    // Domain-based validation for production services
-    const serviceDomains: Record<ServiceId, string[]> = {
-      mapable: ["mapable.com.au", "www.mapable.com.au"],
-      accessibooks: ["accessibooks.com.au", "www.accessibooks.com.au"],
-      disapedia: ["disapedia.au", "www.disapedia.au"],
-      mediawiki: [], // MediaWiki uses custom callback URLs
-      "cursor-replit": [], // Cursor/Replit uses custom callback URLs
-    };
-
-    const allowedDomains = serviceDomains[serviceId] || [];
-    try {
-      const url = new URL(callbackUrl);
-      const hostname = url.hostname.toLowerCase();
-      
-      // Check if callback URL is from an allowed domain
-      if (allowedDomains.some((domain) => hostname === domain || hostname.endsWith(`.${domain}`))) {
-        // Ensure it's a callback path (security: only allow /auth/callback or similar)
-        const pathname = url.pathname.toLowerCase();
-        if (pathname.includes("/auth/callback") || pathname.includes("/oauth/callback")) {
-          return true;
-        }
-      }
-    } catch {
-      // Invalid URL
-      return false;
-    }
-
-    // In development, allow localhost variations
-    if (process.env.NODE_ENV === "development") {
-      const localhostPattern = /^https?:\/\/localhost(:\d+)?/;
-      if (localhostPattern.test(callbackUrl)) {
-        return true;
-      }
-    }
-
-    return false;
+  isEnabled(serviceId: ServiceId): boolean {
+    const service = this.services.get(serviceId);
+    return service?.enabled ?? false;
   }
 
   /**
-   * Get service callback URL
+   * Validate service credentials
    */
-  getServiceCallbackUrl(serviceId: ServiceId): string | null {
-    const config = this.getServiceConfig(serviceId);
-    return config?.callbackUrl || null;
+  validateCredentials(serviceId: ServiceId, clientId: string, clientSecret: string): boolean {
+    const service = this.services.get(serviceId);
+    if (!service) return false;
+    return service.clientId === clientId && service.clientSecret === clientSecret;
   }
 
   /**
-   * Check if service is enabled
+   * Get all enabled services
    */
-  isServiceEnabled(serviceId: ServiceId): boolean {
-    const config = this.getServiceConfig(serviceId);
-    return config?.enabled ?? false;
+  getAllEnabled(): ServiceConfig[] {
+    return Array.from(this.services.values()).filter((s) => s.enabled);
   }
 
   /**
-   * Get all registered services
+   * Validate callback URL for service
    */
-  getAllServices(): ServiceConfig[] {
-    if (!this.initialized) {
-      this.initialize();
-    }
-
-    return Array.from(this.services.values());
+  validateCallbackUrl(serviceId: ServiceId, callbackUrl: string): boolean {
+    const service = this.services.get(serviceId);
+    if (!service) return false;
+    return callbackUrl.startsWith(service.callbackUrl) || callbackUrl === service.callbackUrl;
   }
 
   /**
-   * Validate service credentials (for service-to-service auth)
-   */
-  validateServiceCredentials(serviceId: ServiceId, clientId: string, clientSecret: string): boolean {
-    const config = this.getServiceConfig(serviceId);
-    if (!config || !config.clientId || !config.clientSecret) {
-      return false;
-    }
-
-    return config.clientId === clientId && config.clientSecret === clientSecret;
-  }
-
-  /**
-   * Get allowed scopes for a service
+   * Get allowed scopes for service
    */
   getAllowedScopes(serviceId: ServiceId): string[] {
-    const config = this.getServiceConfig(serviceId);
-    return config?.allowedScopes || [];
+    const service = this.services.get(serviceId);
+    return service?.allowedScopes || [];
   }
 
   /**
-   * Validate requested scopes against service allowed scopes
+   * Validate scopes for service
    */
-  validateScopes(serviceId: ServiceId, requestedScopes: string[]): boolean {
+  validateScopes(serviceId: ServiceId, scopes: string[]): boolean {
     const allowedScopes = this.getAllowedScopes(serviceId);
-    return requestedScopes.every((scope) => allowedScopes.includes(scope));
+    return scopes.every((scope) => allowedScopes.includes(scope));
   }
 }
 
 // Singleton instance
 export const serviceRegistry = new ServiceRegistry();
-
-// Initialize on module load
-serviceRegistry.initialize();

@@ -3,103 +3,134 @@
  * Provides OAuth 2.0 extension compatibility and user synchronization
  */
 
+import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import { userInfoService } from "./user-info-service";
+import { getUserInfo, MediaWikiUserInfo } from "./user-info-service";
 import { serviceRegistry } from "./service-registry";
-import type { ServiceId } from "./service-registry";
 
-class MediaWikiIntegration {
-  /**
-   * Get user data in MediaWiki-compatible format
-   */
-  async getUserForMediaWiki(userId: string): Promise<any | null> {
-    try {
-      const result = await userInfoService.getUserInfo({
-        userId,
-        serviceId: "mediawiki",
-        format: "mediawiki",
-      });
+export interface MediaWikiUser {
+  name: string;
+  email: string;
+  realname: string;
+  groups?: string[];
+}
 
-      if ("error" in result) {
-        return null;
-      }
+/**
+ * Create or update MediaWiki user via API
+ */
+export async function syncMediaWikiUser(
+  userId: string,
+  mediaWikiApiUrl: string,
+  apiToken?: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const userInfo = await getUserInfo(userId, "mediawiki", undefined, "mediawiki") as MediaWikiUserInfo | null;
 
-      return result;
-    } catch (error) {
-      logger.error("Get MediaWiki user error", error);
-      return null;
+    if (!userInfo) {
+      return {
+        success: false,
+        error: "User not found",
+      };
     }
-  }
 
-  /**
-   * Create or update MediaWiki user via API
-   */
-  async syncUserToMediaWiki(
-    userId: string,
-    mediaWikiApiUrl: string,
-    apiToken: string
-  ): Promise<boolean> {
-    try {
-      // Get user data
-      const userData = await this.getUserForMediaWiki(userId);
-      if (!userData) {
-        return false;
-      }
+    // MediaWiki API endpoint for user creation/update
+    const apiEndpoint = `${mediaWikiApiUrl}/api.php`;
 
-      // Call MediaWiki API to create/update user
-      // This is a placeholder - actual implementation depends on MediaWiki API
-      const response = await fetch(`${mediaWikiApiUrl}/api.php`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          Authorization: `Bearer ${apiToken}`,
-        },
-        body: new URLSearchParams({
-          action: "createuser",
-          username: userData.username,
-          email: userData.email,
-          realname: userData.realname,
-          format: "json",
-        }),
-      });
+    // Create user if doesn't exist, or update if exists
+    const params = new URLSearchParams({
+      action: "createaccount", // or "edit" for updates
+      format: "json",
+      username: userInfo.username,
+      password: generateRandomPassword(), // MediaWiki requires password
+      email: userInfo.email,
+      realname: userInfo.realname,
+      ...(apiToken && { token: apiToken }),
+    });
 
-      if (!response.ok) {
-        logger.warn("MediaWiki user sync failed", { userId, status: response.status });
-        return false;
-      }
+    const response = await fetch(`${apiEndpoint}?${params.toString()}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+    });
 
-      logger.info("MediaWiki user synced", { userId });
-      return true;
-    } catch (error) {
-      logger.error("MediaWiki user sync error", error);
-      return false;
+    if (!response.ok) {
+      const error = await response.json();
+      logger.error("MediaWiki API error", error);
+      return {
+        success: false,
+        error: error.error?.info || "MediaWiki API error",
+      };
     }
-  }
 
-  /**
-   * Validate MediaWiki OAuth request
-   */
-  validateMediaWikiRequest(request: any): boolean {
-    try {
-      // Validate request structure
-      // This is a placeholder - actual validation depends on MediaWiki OAuth extension
-      return !!request.client_id && !!request.redirect_uri;
-    } catch (error) {
-      logger.error("MediaWiki request validation error", error);
-      return false;
+    const result = await response.json();
+    
+    if (result.error) {
+      return {
+        success: false,
+        error: result.error.info || "Failed to create MediaWiki user",
+      };
     }
-  }
 
-  /**
-   * Generate MediaWiki-compatible session token
-   */
-  generateMediaWikiSession(userId: string): string {
-    // Generate a session token compatible with MediaWiki
-    // This is a placeholder - actual implementation depends on MediaWiki requirements
-    const timestamp = Date.now();
-    const random = Math.random().toString(36).substring(2);
-    return `${userId}_${timestamp}_${random}`;
+    logger.info("MediaWiki user synced", { userId, username: userInfo.username });
+
+    return { success: true };
+  } catch (error) {
+    logger.error("MediaWiki user sync error", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Sync failed",
+    };
   }
 }
 
-export const mediaWikiIntegration = new MediaWikiIntegration();
+/**
+ * Generate random password for MediaWiki user
+ * In production, you might want to use a more secure method
+ */
+function generateRandomPassword(): string {
+  return crypto.randomBytes(32).toString("base64");
+}
+
+/**
+ * Validate MediaWiki OAuth request
+ */
+export function validateMediaWikiRequest(
+  request: {
+    oauth_consumer_key?: string;
+    oauth_token?: string;
+    oauth_signature?: string;
+  }
+): boolean {
+  // In a full implementation, you would:
+  // 1. Validate OAuth signature
+  // 2. Check consumer key against registered MediaWiki instances
+  // 3. Validate token
+  // For now, we'll do basic validation
+  return !!(request.oauth_consumer_key && request.oauth_token);
+}
+
+/**
+ * Get MediaWiki session token
+ */
+export async function getMediaWikiSession(
+  userId: string,
+  mediaWikiApiUrl: string
+): Promise<string | null> {
+  try {
+    // This would typically involve:
+    // 1. Getting user's MediaWiki credentials
+    // 2. Authenticating with MediaWiki API
+    // 3. Getting session token
+    // For now, we'll return a placeholder
+    
+    logger.info("MediaWiki session requested", { userId, mediaWikiApiUrl });
+    return null;
+  } catch (error) {
+    logger.error("Error getting MediaWiki session", error);
+    return null;
+  }
+}
+
+// Import crypto
+import crypto from "crypto";

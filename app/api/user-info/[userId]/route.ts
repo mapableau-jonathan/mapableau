@@ -1,72 +1,99 @@
 /**
  * User Information API Endpoint
- * Serves user data to MediaWiki and Cursor/Replit applications
+ * Provides user information to MediaWiki and Cursor/Replit applications
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { userInfoService } from "@/lib/services/auth/user-info-service";
-import { serviceRegistry, type ServiceId } from "@/lib/services/auth/service-registry";
-import { logger } from "@/lib/logger";
+import { getUserInfo } from "@/lib/services/auth/user-info-service";
+import { validateToken } from "@/lib/services/auth/token-issuance-service";
 import { extractTokenFromHeader } from "@/lib/auth/jwt-service";
+import { serviceRegistry, ServiceId } from "@/lib/services/auth/service-registry";
+import { logger } from "@/lib/logger";
 
+/**
+ * GET /api/user-info/[userId]
+ * Get user information
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: { userId: string } }
 ) {
   try {
     const userId = params.userId;
+    const fields = request.nextUrl.searchParams.get("fields")?.split(",");
+    const format = (request.nextUrl.searchParams.get("format") || "json") as "json" | "mediawiki";
 
-    // Get serviceId from query params or header
-    const serviceId = (request.nextUrl.searchParams.get("serviceId") ||
-      request.headers.get("x-service-id")) as ServiceId;
+    // Authenticate request
+    const authHeader = request.headers.get("authorization");
+    const token = extractTokenFromHeader(authHeader);
+
+    if (!token) {
+      return NextResponse.json(
+        { error: "Authorization token required" },
+        { status: 401 }
+      );
+    }
+
+    // Extract service ID from token
+    const { verifyToken } = await import("@/lib/auth/jwt-service");
+    let serviceId: ServiceId | null = null;
+
+    try {
+      const payload = verifyToken(token);
+      // Get service ID from token's serviceAccess or extract from token claims
+      serviceId = payload.serviceAccess?.[0] as ServiceId || null;
+    } catch {
+      // Try to get service ID from query parameter as fallback
+      serviceId = request.nextUrl.searchParams.get("serviceId") as ServiceId | null;
+    }
 
     if (!serviceId) {
       return NextResponse.json(
-        { error: "serviceId is required" },
+        { error: "Service ID required" },
         { status: 400 }
       );
     }
 
     // Validate service
-    if (!serviceRegistry.isServiceEnabled(serviceId)) {
+    if (!serviceRegistry.isEnabled(serviceId)) {
       return NextResponse.json(
         { error: "Service not found or disabled" },
         { status: 400 }
       );
     }
 
-    // Get fields and format from query params
-    const fieldsParam = request.nextUrl.searchParams.get("fields");
-    const fields = fieldsParam ? fieldsParam.split(",") : undefined;
-    const format = (request.nextUrl.searchParams.get("format") || "json") as "json" | "mediawiki";
-
-    // Get auth token
-    const authHeader = request.headers.get("authorization");
-    const token = extractTokenFromHeader(authHeader);
-
-    // Get user info
-    const result = await userInfoService.getUserInfo(
-      {
-        userId,
-        serviceId,
-        fields,
-        format,
-      },
-      token || undefined
-    );
-
-    if ("error" in result) {
+    // Validate token for service
+    const tokenValidation = await validateToken(token, serviceId);
+    if (!tokenValidation.valid) {
       return NextResponse.json(
-        { error: result.error },
-        { status: "error" in result && result.error.includes("not found") ? 404 : 401 }
+        { error: tokenValidation.error || "Invalid token" },
+        { status: 401 }
       );
     }
 
-    return NextResponse.json(result);
+    // Get user info
+    const userInfo = await getUserInfo(userId, serviceId, fields, format);
+
+    if (!userInfo) {
+      return NextResponse.json(
+        { error: "User not found" },
+        { status: 404 }
+      );
+    }
+
+    // Log access
+    logger.info("User info accessed", {
+      userId,
+      serviceId,
+      format,
+      fields: fields?.join(","),
+    });
+
+    return NextResponse.json(userInfo);
   } catch (error) {
     logger.error("User info endpoint error", error);
     return NextResponse.json(
-      { error: "Failed to get user information" },
+      { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }
     );
   }

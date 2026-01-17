@@ -1,78 +1,95 @@
 /**
  * Batch User Information API Endpoint
- * Returns user data for multiple users
+ * Provides user information for multiple users
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { userInfoService } from "@/lib/services/auth/user-info-service";
-import { serviceRegistry, type ServiceId } from "@/lib/services/auth/service-registry";
-import { logger } from "@/lib/logger";
+import { getBatchUserInfo } from "@/lib/services/auth/user-info-service";
+import { validateToken } from "@/lib/services/auth/token-issuance-service";
 import { extractTokenFromHeader } from "@/lib/auth/jwt-service";
+import { serviceRegistry, ServiceId } from "@/lib/services/auth/service-registry";
+import { logger } from "@/lib/logger";
 
+/**
+ * POST /api/user-info/batch
+ * Get batch user information
+ */
 export async function POST(request: NextRequest) {
   try {
-    // Parse request body
     const body = await request.json();
     const { userIds, fields } = body;
 
-    if (!Array.isArray(userIds) || userIds.length === 0) {
+    if (!userIds || !Array.isArray(userIds)) {
       return NextResponse.json(
         { error: "userIds array is required" },
         { status: 400 }
       );
     }
 
-    // Get serviceId from body or header
-    const serviceId = (body.serviceId || request.headers.get("x-service-id")) as ServiceId;
+    // Authenticate request
+    const authHeader = request.headers.get("authorization");
+    const token = extractTokenFromHeader(authHeader);
+
+    if (!token) {
+      return NextResponse.json(
+        { error: "Authorization token required" },
+        { status: 401 }
+      );
+    }
+
+    // Extract service ID
+    const { verifyToken } = await import("@/lib/auth/jwt-service");
+    let serviceId: ServiceId | null = null;
+
+    try {
+      const payload = verifyToken(token);
+      serviceId = payload.serviceAccess?.[0] as ServiceId || null;
+    } catch {
+      serviceId = body.serviceId as ServiceId | null;
+    }
 
     if (!serviceId) {
       return NextResponse.json(
-        { error: "serviceId is required" },
+        { error: "Service ID required" },
         { status: 400 }
       );
     }
 
     // Validate service
-    if (!serviceRegistry.isServiceEnabled(serviceId)) {
+    if (!serviceRegistry.isEnabled(serviceId)) {
       return NextResponse.json(
         { error: "Service not found or disabled" },
         { status: 400 }
       );
     }
 
-    // Get auth token
-    const authHeader = request.headers.get("authorization");
-    const token = extractTokenFromHeader(authHeader);
-
-    if (!token) {
-      return NextResponse.json(
-        { error: "Authorization required" },
-        { status: 401 }
-      );
-    }
-
     // Validate token
-    const { tokenIssuanceService } = await import("@/lib/services/auth/token-issuance-service");
-    const validationResult = await tokenIssuanceService.validateToken(token, serviceId);
-
-    if ("error" in validationResult) {
+    const tokenValidation = await validateToken(token, serviceId);
+    if (!tokenValidation.valid) {
       return NextResponse.json(
-        { error: "Invalid or expired token" },
+        { error: tokenValidation.error || "Invalid token" },
         { status: 401 }
       );
     }
 
     // Get batch user info
-    const results = await userInfoService.batchGetUserInfo(userIds, serviceId, fields);
+    const userInfoList = await getBatchUserInfo(userIds, serviceId, fields);
+
+    // Log access
+    logger.info("Batch user info accessed", {
+      userIds: userIds.length,
+      serviceId,
+      fields: fields?.join(","),
+    });
 
     return NextResponse.json({
-      users: results,
-      count: results.length,
+      users: userInfoList,
+      count: userInfoList.length,
     });
   } catch (error) {
     logger.error("Batch user info endpoint error", error);
     return NextResponse.json(
-      { error: "Failed to get user information" },
+      { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }
     );
   }

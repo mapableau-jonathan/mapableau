@@ -4,61 +4,92 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { tokenIssuanceService } from "@/lib/services/auth/token-issuance-service";
-import { serviceRegistry, type ServiceId } from "@/lib/services/auth/service-registry";
-import { logger } from "@/lib/logger";
+import { validateToken } from "@/lib/services/auth/token-issuance-service";
+import { serviceRegistry, ServiceId } from "@/lib/services/auth/service-registry";
 import { extractTokenFromHeader } from "@/lib/auth/jwt-service";
+import { logger } from "@/lib/logger";
 
+/**
+ * POST /api/tokens/validate
+ * Validate token
+ */
 export async function POST(request: NextRequest) {
   try {
-    // Get token from Authorization header
-    const authHeader = request.headers.get("authorization");
-    const token = extractTokenFromHeader(authHeader);
+    const body = await request.json();
+    const { token, serviceId } = body;
 
-    if (!token) {
+    if (!token || !serviceId) {
       return NextResponse.json(
-        { error: "Token required" },
-        { status: 401 }
-      );
-    }
-
-    // Get serviceId from request body or header
-    const body = await request.json().catch(() => ({}));
-    const serviceId = (body.serviceId || request.headers.get("x-service-id")) as ServiceId;
-
-    if (!serviceId) {
-      return NextResponse.json(
-        { error: "serviceId is required" },
-        { status: 400 }
-      );
-    }
-
-    // Validate service
-    if (!serviceRegistry.isServiceEnabled(serviceId)) {
-      return NextResponse.json(
-        { error: "Service not found or disabled" },
+        { error: "token and serviceId are required" },
         { status: 400 }
       );
     }
 
     // Validate token
-    const result = await tokenIssuanceService.validateToken(token, serviceId);
+    const result = await validateToken(token, serviceId as ServiceId);
 
-    if ("error" in result) {
+    if (!result.valid) {
       return NextResponse.json(
-        { error: result.error },
+        { valid: false, error: result.error || "Token validation failed" },
         { status: 401 }
       );
     }
 
     return NextResponse.json({
       valid: true,
-      payload: result,
+      payload: result.payload,
     });
   } catch (error) {
     logger.error("Token validation endpoint error", error);
     return NextResponse.json(
-      { error: "Failed to validate token" },
+      { valid: false, error: error instanceof Error ? error.message : "Validation failed" },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * GET /api/tokens/validate
+ * Validate token from Authorization header
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const authHeader = request.headers.get("authorization");
+    const token = extractTokenFromHeader(authHeader);
+    const serviceId = request.nextUrl.searchParams.get("serviceId") as ServiceId | null;
+
+    if (!token) {
+      return NextResponse.json(
+        { valid: false, error: "Token is required" },
+        { status: 400 }
+      );
+    }
+
+    if (!serviceId) {
+      return NextResponse.json(
+        { valid: false, error: "serviceId query parameter is required" },
+        { status: 400 }
+      );
+    }
+
+    // Validate token
+    const result = await validateToken(token, serviceId);
+
+    if (!result.valid) {
+      return NextResponse.json(
+        { valid: false, error: result.error || "Token validation failed" },
+        { status: 401 }
+      );
+    }
+
+    return NextResponse.json({
+      valid: true,
+      payload: result.payload,
+    });
+  } catch (error) {
+    logger.error("Token validation endpoint error", error);
+    return NextResponse.json(
+      { valid: false, error: error instanceof Error ? error.message : "Validation failed" },
       { status: 500 }
     );
   }

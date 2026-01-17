@@ -1,6 +1,6 @@
 /**
- * Facebook OAuth Callback Endpoint
- * Handles Facebook OAuth callback and generates JWT tokens
+ * Microsoft Entra ID (Azure AD) OAuth Callback Endpoint
+ * Handles Microsoft OAuth callback and generates JWT tokens
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -11,8 +11,8 @@ import { parseServiceCallback, getServiceCallbackUrl } from "@/lib/auth/service-
 import { logger } from "@/lib/logger";
 
 /**
- * GET /api/auth/identity-provider/facebook/callback
- * Facebook OAuth callback handler
+ * GET /api/auth/identity-provider/microsoft/callback
+ * Microsoft OAuth callback handler
  */
 export async function GET(request: NextRequest) {
   try {
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     const state = request.nextUrl.searchParams.get("state");
 
     if (!code) {
-      return NextResponse.redirect(new URL("/login?error=facebook_oauth_error", request.url));
+      return NextResponse.redirect(new URL("/login?error=microsoft_oauth_error", request.url));
     }
 
     // Parse service callback if specified
@@ -40,15 +40,15 @@ export async function GET(request: NextRequest) {
     if (serviceName && serviceCallback) {
       callbackUrl = serviceCallback;
     } else if (serviceName) {
-      callbackUrl = getServiceCallbackUrl(serviceName, "facebook");
+      callbackUrl = getServiceCallbackUrl(serviceName, "microsoft");
     }
 
     return new Promise<NextResponse>((resolve) => {
-      passport.authenticate("facebook", { session: false }, async (err: any, user: any) => {
+      passport.authenticate("azure-ad", { session: false }, async (err: any, user: any) => {
         if (err || !user) {
-          logger.error("Facebook callback error", err);
+          logger.error("Microsoft callback error", err);
           return resolve(
-            NextResponse.redirect(new URL(`/login?error=facebook_oauth_error`, request.url))
+            NextResponse.redirect(new URL(`/login?error=microsoft_oauth_error`, request.url))
           );
         }
 
@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
 
           return resolve(response);
         } catch (tokenError) {
-          logger.error("Token generation error in Facebook callback", tokenError);
+          logger.error("Token generation error in Microsoft callback", tokenError);
           return resolve(
             NextResponse.redirect(new URL(`/login?error=token_error`, request.url))
           );
@@ -94,7 +94,7 @@ export async function GET(request: NextRequest) {
       })(request as any, {} as any, () => {});
     });
   } catch (error) {
-    logger.error("Facebook callback endpoint error", error);
-    return NextResponse.redirect(new URL("/login?error=facebook_oauth_error", request.url));
+    logger.error("Microsoft callback endpoint error", error);
+    return NextResponse.redirect(new URL("/login?error=microsoft_oauth_error", request.url));
   }
 }

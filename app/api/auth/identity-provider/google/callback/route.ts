@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import passport from "@/lib/auth/passport-config";
 import { generateTokenPair } from "@/lib/auth/jwt-service";
 import { getUserServices } from "@/lib/auth/sso-service";
+import { parseServiceCallback, getServiceCallbackUrl } from "@/lib/auth/service-callbacks";
 import { logger } from "@/lib/logger";
 
 /**
@@ -22,6 +23,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL("/login?error=google_oauth_error", request.url));
     }
 
+    // Parse service callback if specified
+    const { serviceName, serviceCallback } = parseServiceCallback(request);
+    
     let callbackUrl = "/dashboard";
     if (state) {
       try {
@@ -30,6 +34,13 @@ export async function GET(request: NextRequest) {
       } catch {
         // Invalid state, use default
       }
+    }
+
+    // If service is specified, use service callback URL
+    if (serviceName && serviceCallback) {
+      callbackUrl = serviceCallback;
+    } else if (serviceName) {
+      callbackUrl = getServiceCallbackUrl(serviceName, "google");
     }
 
     return new Promise<NextResponse>((resolve) => {

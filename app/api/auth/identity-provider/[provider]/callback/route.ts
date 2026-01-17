@@ -1,64 +1,85 @@
 /**
- * OAuth Provider Callback Endpoint
- * Handles OAuth callback and redirects to service with token
+ * Dynamic Identity Provider Callback Route
+ * Handles OAuth callbacks for all providers
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { identityProviderService, type OAuthProvider } from "@/lib/services/auth/identity-provider-service";
-import { serviceRegistry } from "@/lib/services/auth/service-registry";
+import { handleCallback } from "@/lib/services/auth/identity-provider-service";
 import { logger } from "@/lib/logger";
 
+/**
+ * GET /api/auth/identity-provider/[provider]/callback
+ * Handle OAuth callback
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: { provider: string } }
 ) {
   try {
-    const provider = params.provider.toLowerCase() as OAuthProvider;
-    
-    // Validate provider
-    const validProviders: OAuthProvider[] = ["google", "facebook", "microsoft", "wix"];
-    if (!validProviders.includes(provider)) {
+    const provider = params.provider as "google" | "facebook" | "microsoft" | "wix";
+    const code = request.nextUrl.searchParams.get("code");
+    const state = request.nextUrl.searchParams.get("state");
+    const error = request.nextUrl.searchParams.get("error");
+
+    // Handle OAuth errors
+    if (error) {
+      logger.error("OAuth provider error", { provider, error });
       return NextResponse.redirect(
-        new URL("/login?error=invalid_provider", request.url)
+        new URL(`/login?error=oauth_error&provider=${provider}`, request.url)
       );
     }
 
-    // Get code and state from query params
-    const code = request.nextUrl.searchParams.get("code");
-    const state = request.nextUrl.searchParams.get("state");
-
     if (!code || !state) {
       return NextResponse.redirect(
-        new URL("/login?error=missing_params", request.url)
+        new URL(`/login?error=missing_params&provider=${provider}`, request.url)
       );
     }
 
     // Handle callback
-    const result = await identityProviderService.handleCallback(provider, code, state);
+    const result = await handleCallback(provider, code, state);
 
-    if (result.error || !result.user) {
-      logger.error("OAuth callback error", { error: result.error, provider });
+    if (!result.success) {
+      logger.error("Callback handling error", { provider, error: result.error });
       return NextResponse.redirect(
-        new URL(`/login?error=${result.error || "auth_failed"}`, request.url)
+        new URL(`/login?error=callback_failed&provider=${provider}`, request.url)
       );
     }
 
-    // Use callback URL from result (extracted from state)
-    const finalCallbackUrl = result.callbackUrl || serviceRegistry.getServiceCallbackUrl(result.serviceId!) || "/auth/callback";
-    
-    // Create callback URL with tokens
-    const callbackUrl = new URL(finalCallbackUrl, request.nextUrl.origin);
-    callbackUrl.searchParams.set("token", result.token);
-    callbackUrl.searchParams.set("refreshToken", result.refreshToken);
-    callbackUrl.searchParams.set("expiresIn", result.expiresIn.toString());
-    callbackUrl.searchParams.set("serviceId", result.serviceId!);
+    // Build callback URL with token
+    const callbackUrl = new URL(result.callbackUrl || "/dashboard", request.url);
+    if (result.tokens?.accessToken) {
+      callbackUrl.searchParams.set("token", result.tokens.accessToken);
+      callbackUrl.searchParams.set("serviceId", state.split(".")[0] || ""); // Extract serviceId from state
+    }
 
-    // Redirect to service callback
-    return NextResponse.redirect(callbackUrl.toString());
+    // Set cookies for token storage
+    const response = NextResponse.redirect(callbackUrl);
+
+    if (result.tokens?.accessToken) {
+      response.cookies.set("access_token", result.tokens.accessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: result.tokens.expiresIn || 3600,
+        path: "/",
+      });
+    }
+
+    if (result.tokens?.refreshToken) {
+      response.cookies.set("refresh_token", result.tokens.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 7 * 24 * 60 * 60, // 7 days
+        path: "/",
+      });
+    }
+
+    return response;
   } catch (error) {
-    logger.error("OAuth callback error", error);
+    logger.error("Callback route error", error);
     return NextResponse.redirect(
-      new URL("/login?error=callback_error", request.url)
+      new URL(`/login?error=internal_error`, request.url)
     );
   }
 }

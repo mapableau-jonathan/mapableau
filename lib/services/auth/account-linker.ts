@@ -5,214 +5,267 @@
 
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import { verify } from "argon2";
+import { NormalizedProfile } from "./profile-normalizer";
 
-export interface AccountLinkRequest {
+export interface AccountLinkResult {
+  success: boolean;
   userId: string;
-  provider: string;
-  providerAccountId: string;
-  accessToken?: string;
-  refreshToken?: string;
-  email?: string;
-  requirePasswordVerification?: boolean;
-  password?: string;
+  isNewAccount: boolean;
+  isNewLink: boolean;
+  error?: string;
 }
 
-class AccountLinker {
-  /**
-   * Link an OAuth account to an existing user
-   */
-  async linkAccount(request: AccountLinkRequest): Promise<{ success: boolean; error?: string }> {
-    try {
-      // Get user
-      const user = await prisma.user.findUnique({
-        where: { id: request.userId },
-        include: { accounts: true },
-      });
-
-      if (!user) {
-        return { success: false, error: "User not found" };
-      }
-
-      // Check if account already exists
-      const existingAccount = await prisma.account.findUnique({
-        where: {
-          provider_providerAccountId: {
-            provider: request.provider,
-            providerAccountId: request.providerAccountId,
-          },
-        },
-      });
-
-      if (existingAccount && existingAccount.userId !== request.userId) {
-        return { success: false, error: "Account already linked to another user" };
-      }
-
-      // If email is provided and different from user email, verify ownership
-      if (request.email && request.email.toLowerCase() !== user.email.toLowerCase()) {
-        // Check if email matches
-        if (request.email.toLowerCase() !== user.email.toLowerCase()) {
-          return { success: false, error: "Email mismatch" };
-        }
-      }
-
-      // If password verification is required
-      if (request.requirePasswordVerification) {
-        if (!request.password || !user.passwordHash) {
-          return { success: false, error: "Password verification required" };
-        }
-
-        const valid = await verify(user.passwordHash, request.password);
-        if (!valid) {
-          return { success: false, error: "Invalid password" };
-        }
-      }
-
-      // Create or update account
-      if (existingAccount) {
-        await prisma.account.update({
-          where: { id: existingAccount.id },
-          data: {
-            access_token: request.accessToken || existingAccount.access_token,
-            refresh_token: request.refreshToken || existingAccount.refresh_token,
-            expires_at: request.accessToken ? this.calculateExpiresAt() : existingAccount.expires_at,
-          },
-        });
-      } else {
-        await prisma.account.create({
-          data: {
-            userId: request.userId,
-            type: "oauth",
-            provider: request.provider,
-            providerAccountId: request.providerAccountId,
-            access_token: request.accessToken,
-            refresh_token: request.refreshToken,
-            expires_at: request.accessToken ? this.calculateExpiresAt() : null,
-          },
-        });
-      }
-
-      logger.info("Account linked", {
-        userId: request.userId,
-        provider: request.provider,
-      });
-
-      return { success: true };
-    } catch (error) {
-      logger.error("Account linking error", error);
-      return { success: false, error: "Failed to link account" };
+/**
+ * Link OAuth account to user
+ * Creates new user if doesn't exist, or links to existing user by email
+ */
+export async function linkAccount(
+  normalizedProfile: NormalizedProfile,
+  requireEmailVerification: boolean = false
+): Promise<AccountLinkResult> {
+  try {
+    // Validate profile
+    if (!normalizedProfile.email) {
+      return {
+        success: false,
+        userId: "",
+        isNewAccount: false,
+        isNewLink: false,
+        error: "Email is required for account linking",
+      };
     }
-  }
 
-  /**
-   * Unlink an account from user
-   */
-  async unlinkAccount(userId: string, provider: string): Promise<{ success: boolean; error?: string }> {
-    try {
-      // Prevent unlinking if it's the only account and user has no password
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        include: { accounts: true },
-      });
-
-      if (!user) {
-        return { success: false, error: "User not found" };
-      }
-
-      const oauthAccounts = user.accounts.filter((acc) => acc.type === "oauth");
-      if (oauthAccounts.length === 1 && !user.passwordHash) {
-        return { success: false, error: "Cannot unlink last authentication method" };
-      }
-
-      // Delete account
-      await prisma.account.deleteMany({
-        where: {
-          userId,
-          provider,
+    // Check if account already exists for this provider
+    const existingAccount = await prisma.account.findUnique({
+      where: {
+        provider_providerAccountId: {
+          provider: normalizedProfile.provider,
+          providerAccountId: normalizedProfile.providerAccountId,
         },
-      });
+      },
+      include: { user: true },
+    });
 
-      logger.info("Account unlinked", { userId, provider });
-      return { success: true };
-    } catch (error) {
-      logger.error("Account unlinking error", error);
-      return { success: false, error: "Failed to unlink account" };
+    if (existingAccount) {
+      // Account already linked, update tokens if needed
+      return {
+        success: true,
+        userId: existingAccount.userId,
+        isNewAccount: false,
+        isNewLink: false,
+      };
     }
-  }
 
-  /**
-   * Get linked accounts for a user
-   */
-  async getLinkedAccounts(userId: string): Promise<any[]> {
-    try {
-      const accounts = await prisma.account.findMany({
-        where: { userId },
-        select: {
-          id: true,
-          provider: true,
-          type: true,
-          createdAt: true,
-        },
-      });
+    // Find user by email
+    const existingUser = await prisma.user.findUnique({
+      where: { email: normalizedProfile.email.toLowerCase() },
+      include: { accounts: true },
+    });
 
-      return accounts;
-    } catch (error) {
-      logger.error("Get linked accounts error", error);
-      return [];
-    }
-  }
-
-  /**
-   * Handle email conflicts between providers
-   */
-  async handleEmailConflict(
-    email: string,
-    provider: string,
-    providerAccountId: string
-  ): Promise<{ userId: string | null; action: "link" | "create" | "error"; error?: string }> {
-    try {
-      // Find user by email
-      const user = await prisma.user.findUnique({
-        where: { email: email.toLowerCase() },
-        include: { accounts: true },
-      });
-
-      if (!user) {
-        return { userId: null, action: "create" };
+    if (existingUser) {
+      // Check if email is verified (if required)
+      if (requireEmailVerification && !existingUser.emailVerified) {
+        return {
+          success: false,
+          userId: existingUser.id,
+          isNewAccount: false,
+          isNewLink: false,
+          error: "Email verification required before linking account",
+        };
       }
 
-      // Check if account already linked
-      const existingAccount = user.accounts.find(
-        (acc) => acc.provider === provider && acc.providerAccountId === providerAccountId
+      // Check if this provider is already linked
+      const providerAccount = existingUser.accounts.find(
+        (acc) => acc.provider === normalizedProfile.provider
       );
 
-      if (existingAccount) {
-        return { userId: user.id, action: "link" };
+      if (providerAccount) {
+        // Update existing account
+        await prisma.account.update({
+          where: { id: providerAccount.id },
+          data: {
+            providerAccountId: normalizedProfile.providerAccountId,
+            access_token: normalizedProfile.rawProfile.accessToken,
+            refresh_token: normalizedProfile.rawProfile.refreshToken,
+          },
+        });
+
+        return {
+          success: true,
+          userId: existingUser.id,
+          isNewAccount: false,
+          isNewLink: false,
+        };
       }
 
-      // Check if user has password (can link safely)
-      if (user.passwordHash) {
-        return { userId: user.id, action: "link" };
-      }
+      // Link new provider to existing user
+      await prisma.account.create({
+        data: {
+          userId: existingUser.id,
+          type: "oauth",
+          provider: normalizedProfile.provider,
+          providerAccountId: normalizedProfile.providerAccountId,
+          access_token: normalizedProfile.rawProfile.accessToken,
+          refresh_token: normalizedProfile.rawProfile.refreshToken,
+        },
+      });
 
-      // User exists but no password - require verification
+      // Update user info if provider data is more recent
+      await updateUserFromProfile(existingUser.id, normalizedProfile);
+
       return {
-        userId: user.id,
-        action: "error",
-        error: "Email already exists. Please verify ownership to link account.",
+        success: true,
+        userId: existingUser.id,
+        isNewAccount: false,
+        isNewLink: true,
       };
-    } catch (error) {
-      logger.error("Email conflict handling error", error);
-      return { userId: null, action: "error", error: "Failed to handle email conflict" };
     }
-  }
 
-  /**
-   * Calculate token expiration timestamp
-   */
-  private calculateExpiresAt(): number {
-    return Math.floor(Date.now() / 1000) + 3600; // 1 hour
+    // Create new user and account
+    const newUser = await prisma.user.create({
+      data: {
+        email: normalizedProfile.email.toLowerCase(),
+        name: normalizedProfile.name,
+        image: normalizedProfile.image,
+        emailVerified: normalizedProfile.emailVerified ? new Date() : null,
+        accounts: {
+          create: {
+            type: "oauth",
+            provider: normalizedProfile.provider,
+            providerAccountId: normalizedProfile.providerAccountId,
+            access_token: normalizedProfile.rawProfile.accessToken,
+            refresh_token: normalizedProfile.rawProfile.refreshToken,
+          },
+        },
+      },
+    });
+
+    return {
+      success: true,
+      userId: newUser.id,
+      isNewAccount: true,
+      isNewLink: true,
+    };
+  } catch (error) {
+    logger.error("Account linking error", error);
+    return {
+      success: false,
+      userId: "",
+      isNewAccount: false,
+      isNewLink: false,
+      error: error instanceof Error ? error.message : "Account linking failed",
+    };
   }
 }
 
-export const accountLinker = new AccountLinker();
+/**
+ * Update user information from provider profile
+ */
+async function updateUserFromProfile(userId: string, profile: NormalizedProfile): Promise<void> {
+  try {
+    const updateData: {
+      name?: string;
+      image?: string;
+      emailVerified?: Date;
+    } = {};
+
+    // Update name if provider has better data
+    if (profile.name) {
+      updateData.name = profile.name;
+    }
+
+    // Update image if provider has one and user doesn't
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (profile.image && !user?.image) {
+      updateData.image = profile.image;
+    }
+
+    // Update email verification status
+    if (profile.emailVerified && !user?.emailVerified) {
+      updateData.emailVerified = new Date();
+    }
+
+    if (Object.keys(updateData).length > 0) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: updateData,
+      });
+    }
+  } catch (error) {
+    logger.error("Error updating user from profile", error);
+  }
+}
+
+/**
+ * Unlink account from user
+ */
+export async function unlinkAccount(
+  userId: string,
+  provider: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Prevent unlinking if it's the only account
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { accounts: true },
+    });
+
+    if (!user) {
+      return { success: false, error: "User not found" };
+    }
+
+    if (user.accounts.length <= 1) {
+      return {
+        success: false,
+        error: "Cannot unlink the only authentication method. Please add another method first.",
+      };
+    }
+
+    await prisma.account.deleteMany({
+      where: {
+        userId,
+        provider,
+      },
+    });
+
+    return { success: true };
+  } catch (error) {
+    logger.error("Account unlinking error", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Account unlinking failed",
+    };
+  }
+}
+
+/**
+ * Get linked accounts for user
+ */
+export async function getLinkedAccounts(userId: string): Promise<
+  Array<{
+    provider: string;
+    providerAccountId: string;
+    linkedAt: Date;
+  }>
+> {
+  try {
+    const accounts = await prisma.account.findMany({
+      where: { userId },
+      select: {
+        provider: true,
+        providerAccountId: true,
+        id: true,
+      },
+    });
+
+    // Note: Prisma doesn't have createdAt by default, you may need to add it to schema
+    return accounts.map((acc) => ({
+      provider: acc.provider,
+      providerAccountId: acc.providerAccountId,
+      linkedAt: new Date(), // You'll need to add createdAt to Account model
+    }));
+  } catch (error) {
+    logger.error("Error getting linked accounts", error);
+    return [];
+  }
+}

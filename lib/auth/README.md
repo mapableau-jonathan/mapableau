@@ -30,7 +30,17 @@ lib/auth/
 - `POST /api/auth/passport/refresh` - Refresh access token
 - `GET /api/auth/passport/verify` - Verify JWT token
 
-### SSO
+### Identity Providers (SSO)
+
+- `GET /api/auth/identity-provider/list` - List available identity providers
+- `GET /api/auth/identity-provider/google` - Initiate Google OAuth SSO
+- `GET /api/auth/identity-provider/google/callback` - Google OAuth callback
+- `GET /api/auth/identity-provider/facebook` - Initiate Facebook OAuth SSO
+- `GET /api/auth/identity-provider/facebook/callback` - Facebook OAuth callback
+- `GET /api/auth/identity-provider/microsoft` - Initiate Microsoft Entra ID SSO
+- `GET /api/auth/identity-provider/microsoft/callback` - Microsoft OAuth callback
+
+### Generic SSO
 
 - `GET /api/auth/sso/oauth2` - Initiate OAuth2 SSO
 - `GET /api/auth/sso/oauth2/callback` - OAuth2 callback
@@ -72,6 +82,22 @@ lib/auth/
 - `SAML_SIGNATURE_ALGORITHM` - Signature algorithm (default: "sha256")
 - `SAML_WANT_ASSERTIONS_SIGNED` - Require signed assertions ("true"/"false")
 - `SAML_WANT_MESSAGE_SIGNED` - Require signed messages ("true"/"false")
+
+### Service-Specific Callbacks (Optional)
+
+- `AD_ID_DOMAIN` - Base domain for identity provider (e.g., "https://ad.id" or "https://ad.org.au")
+- `MAPABLE_CALLBACK_URL` - Mapable service callback URL
+- `ACCESSIBOOKS_CALLBACK_URL` - AccessiBooks service callback URL
+- `DISAPEDIA_CALLBACK_URL` - Disapedia service callback URL
+- `MEDIAWIKI_CALLBACK_URL` - MediaWiki service callback URL
+- `CURSOR_REPLIT_CALLBACK_URL` - Cursor/Replit service callback URL
+
+### Additional Configuration (Optional)
+
+- `WIX_CLIENT_ID` - Wix OAuth client ID
+- `WIX_CLIENT_SECRET` - Wix OAuth client secret
+- `WIX_APP_ID` - Wix application ID
+- `DATA_ENCRYPTION_KEY` - Key for data encryption
 
 ## Usage
 

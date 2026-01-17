@@ -8,3 +8,4 @@ export * from "./passport-adapter";
 export * from "./jwt-service";
 export * from "./sso-service";
 export * from "./middleware";
+export * from "./service-callbacks";

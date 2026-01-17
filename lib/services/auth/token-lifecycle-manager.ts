@@ -1,130 +1,104 @@
 /**
  * Token Lifecycle Manager
- * Manages token expiration, revocation, and rotation
+ * Manages token expiration, revocation, rotation, and cleanup
  */
 
 import { logger } from "@/lib/logger";
-import { tokenIssuanceService } from "./token-issuance-service";
-import type { ServiceId } from "./service-registry";
+import { ServiceId } from "./service-registry";
 
+export interface TokenLifecycleConfig {
+  tokenExpiration: number; // seconds
+  refreshTokenExpiration: number; // seconds
+  rotationInterval?: number; // seconds - rotate tokens before expiration
+  cleanupInterval: number; // seconds - how often to run cleanup
+}
+
+/**
+ * Token Lifecycle Manager
+ * Handles token expiration, revocation, and cleanup
+ */
 class TokenLifecycleManager {
-  private revocationList: Set<string> = new Set();
-  private cleanupInterval: NodeJS.Timeout | null = null;
+  private revokedTokens: Set<string> = new Set();
+  private cleanupInterval?: NodeJS.Timeout;
 
   /**
-   * Initialize token lifecycle management
+   * Start token lifecycle management
    */
-  initialize(): void {
-    // Start cleanup job
-    this.startCleanupJob();
+  start(): void {
+    // Run cleanup every hour
+    this.cleanupInterval = setInterval(() => {
+      this.cleanupExpiredTokens();
+    }, 60 * 60 * 1000); // 1 hour
+  }
+
+  /**
+   * Stop token lifecycle management
+   */
+  stop(): void {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+    }
+  }
+
+  /**
+   * Add token to revocation list
+   */
+  revokeToken(tokenId: string): void {
+    this.revokedTokens.add(tokenId);
+    logger.info("Token added to revocation list", { tokenId });
   }
 
   /**
    * Check if token is revoked
    */
   isTokenRevoked(tokenId: string): boolean {
-    return this.revocationList.has(tokenId);
+    return this.revokedTokens.has(tokenId);
   }
 
   /**
-   * Revoke a token
-   */
-  async revokeToken(tokenId: string, serviceId: ServiceId): Promise<boolean> {
-    try {
-      // Add to revocation list
-      this.revocationList.add(tokenId);
-
-      // Call token issuance service to revoke
-      await tokenIssuanceService.revokeToken(tokenId, serviceId);
-
-      logger.info("Token revoked", { tokenId, serviceId });
-      return true;
-    } catch (error) {
-      logger.error("Token revocation error", error);
-      return false;
-    }
-  }
-
-  /**
-   * Rotate a token (issue new token, revoke old one)
-   */
-  async rotateToken(
-    oldTokenId: string,
-    userId: string,
-    serviceId: ServiceId,
-    scopes: string[]
-  ): Promise<{ accessToken: string; refreshToken: string; tokenId: string } | { error: string }> {
-    try {
-      // Issue new token
-      const newTokenResult = await tokenIssuanceService.issueToken({
-        userId,
-        serviceId,
-        scopes,
-      });
-
-      if ("error" in newTokenResult) {
-        return newTokenResult;
-      }
-
-      // Revoke old token
-      await this.revokeToken(oldTokenId, serviceId);
-
-      return {
-        accessToken: newTokenResult.accessToken,
-        refreshToken: newTokenResult.refreshToken,
-        tokenId: newTokenResult.tokenId,
-      };
-    } catch (error) {
-      logger.error("Token rotation error", error);
-      return { error: "Failed to rotate token" };
-    }
-  }
-
-  /**
-   * Start cleanup job for expired tokens
-   */
-  private startCleanupJob(): void {
-    // Run cleanup every hour
-    this.cleanupInterval = setInterval(() => {
-      this.cleanupExpiredTokens();
-    }, 60 * 60 * 1000);
-  }
-
-  /**
-   * Cleanup expired tokens from revocation list
+   * Clean up expired tokens from revocation list
+   * In a full implementation, this would clean up database records
    */
   private cleanupExpiredTokens(): void {
-    try {
-      // In production, you would query the database for expired tokens
-      // and remove them from the revocation list
-      // For now, we'll just log
-      logger.debug("Token cleanup job running", {
-        revocationListSize: this.revocationList.size,
-      });
-
-      // Clear revocation list periodically (tokens should be expired by now)
-      // In production, you'd check expiration dates
-      if (this.revocationList.size > 10000) {
-        this.revocationList.clear();
-        logger.info("Revocation list cleared");
-      }
-    } catch (error) {
-      logger.error("Token cleanup error", error);
-    }
+    // In a full implementation, you would:
+    // 1. Query database for expired tokens
+    // 2. Remove them from revocation list
+    // 3. Clean up token metadata records
+    
+    logger.info("Token cleanup completed", {
+      revokedTokensCount: this.revokedTokens.size,
+    });
   }
 
   /**
-   * Stop cleanup job
+   * Check if token should be rotated
    */
-  stop(): void {
-    if (this.cleanupInterval) {
-      clearInterval(this.cleanupInterval);
-      this.cleanupInterval = null;
-    }
+  shouldRotateToken(issuedAt: Date, rotationInterval?: number): boolean {
+    if (!rotationInterval) return false;
+    const now = Date.now();
+    const issued = issuedAt.getTime();
+    return now - issued >= rotationInterval * 1000;
+  }
+
+  /**
+   * Get token expiration date
+   */
+  getExpirationDate(issuedAt: Date, expirationSeconds: number): Date {
+    return new Date(issuedAt.getTime() + expirationSeconds * 1000);
+  }
+
+  /**
+   * Check if token is expired
+   */
+  isTokenExpired(expiresAt: Date): boolean {
+    return Date.now() >= expiresAt.getTime();
   }
 }
 
+// Singleton instance
 export const tokenLifecycleManager = new TokenLifecycleManager();
 
-// Initialize on module load
-tokenLifecycleManager.initialize();
+// Start lifecycle management on module load
+if (typeof window === "undefined") {
+  tokenLifecycleManager.start();
+}

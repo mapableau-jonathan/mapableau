@@ -25,6 +25,15 @@ const envSchema = z.object({
   WIX_CLIENT_SECRET: z.string().optional(),
   WIX_APP_ID: z.string().optional(),
   
+  // Replit OAuth
+  REPLIT_CLIENT_ID: z.string().optional(),
+  REPLIT_CLIENT_SECRET: z.string().optional(),
+  
+  // MediaWiki OAuth
+  MEDIAWIKI_API_URL: z.string().url().optional(),
+  MEDIAWIKI_CONSUMER_KEY: z.string().optional(),
+  MEDIAWIKI_CONSUMER_SECRET: z.string().optional(),
+  
   // Identity Provider Domain (ad.org.au or ad.id)
   AD_ID_DOMAIN: z.string().url().optional(),
   
