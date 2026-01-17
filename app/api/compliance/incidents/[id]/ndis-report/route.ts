@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { IncidentService } from "@/lib/services/compliance/incident-service";
 import { NDISCommissionClient } from "@/lib/services/compliance/ndis-commission-client";
-import { requireAdmin, requirePlanManager } from "@/lib/security/authorization-utils";
+import { hasAdminOrPlanManagerAccess } from "@/lib/security/authorization-utils";
 import { logger } from "@/lib/logger";
 
 const reportSchema = z.object({
@@ -16,22 +16,10 @@ export async function POST(
 ) {
   try {
     // SECURITY: Require admin or plan manager role to report to NDIS
-    let hasAccess = false;
-    try {
-      await requireAdmin();
-      hasAccess = true;
-    } catch {
-      // If not admin, try plan manager
-      try {
-        await requirePlanManager();
-        hasAccess = true;
-      } catch {
-        // Neither admin nor plan manager - access denied
-        hasAccess = false;
-      }
-    }
+    // Optimized: Single function call instead of multiple try-catch blocks
+    const { hasAccess, user } = await hasAdminOrPlanManagerAccess(req);
 
-    if (!hasAccess) {
+    if (!hasAccess || !user) {
       return NextResponse.json(
         { error: "Forbidden: Admin or Plan Manager access required" },
         { status: 403 }

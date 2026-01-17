@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { PolicyService } from "@/lib/services/compliance/policy-service";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { requireAdmin, requirePlanManager, requireAuth } from "@/lib/security/authorization-utils";
+import { requireAuth, hasAdminOrPlanManagerAccess } from "@/lib/security/authorization-utils";
 import type { PolicyCategory, PolicyStatus } from "@prisma/client";
 
 const createPolicySchema = z.object({
@@ -70,29 +70,15 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     // SECURITY: Require admin or plan manager role to create policies
-    let hasAccess = false;
-    try {
-      await requireAdmin();
-      hasAccess = true;
-    } catch {
-      // If not admin, try plan manager
-      try {
-        await requirePlanManager();
-        hasAccess = true;
-      } catch {
-        // Neither admin nor plan manager - access denied
-        hasAccess = false;
-      }
-    }
+    // Optimized: Single function call instead of multiple try-catch blocks
+    const { hasAccess, user } = await hasAdminOrPlanManagerAccess(req);
 
-    if (!hasAccess) {
+    if (!hasAccess || !user) {
       return NextResponse.json(
         { error: "Forbidden: Admin or Plan Manager access required" },
         { status: 403 }
       );
     }
-
-    const user = await requireAuth();
 
     const body = await req.json();
     const data = createPolicySchema.parse(body);

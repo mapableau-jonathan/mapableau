@@ -112,6 +112,16 @@ export const authOptions: AuthOptions = {
         token.email = user.email;
         token.name = user.name;
         token.picture = user.image;
+        
+        // Fetch and cache user role to avoid DB queries on every request
+        // Only fetch on initial sign-in or if role is missing
+        if (!token.role) {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: user.id },
+            select: { role: true },
+          });
+          token.role = dbUser?.role || null;
+        }
       }
       
       // Add provider info for OAuth users
@@ -128,6 +138,8 @@ export const authOptions: AuthOptions = {
         session.user.email = token.email as string;
         session.user.name = token.name as string;
         session.user.image = token.picture as string | undefined;
+        // Include role in session to avoid DB queries
+        session.user.role = token.role as string | null;
       }
       return session;
     },

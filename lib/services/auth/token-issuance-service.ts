@@ -123,8 +123,8 @@ export async function issueToken(
       }
     }
 
-    // Generate JWT tokens
-    const tokens = generateTokenPair({
+    // Generate JWT tokens (JOSE implementation - now async)
+    const tokens = await generateTokenPair({
       sub: user.id,
       email: user.email,
       name: user.name || undefined,
@@ -174,8 +174,8 @@ export async function validateToken(
   error?: string;
 }> {
   try {
-    // Use basic token verification
-    const payload = verifyToken(token);
+    // Use basic token verification (JOSE implementation - now async)
+    const payload = await verifyToken(token);
 
     // Validate service access
     if (!payload.serviceAccess?.includes(serviceId)) {
@@ -242,7 +242,7 @@ export async function refreshToken(
 ): Promise<TokenIssuanceResult> {
   try {
     const { verifyRefreshToken } = await import("@/lib/auth/jwt-service");
-    const { sub: userId } = verifyRefreshToken(refreshToken);
+    const { sub: userId } = await verifyRefreshToken(refreshToken);
 
     // Get user's service links to determine scopes
     const serviceLinks = await prisma.serviceLink.findMany({
