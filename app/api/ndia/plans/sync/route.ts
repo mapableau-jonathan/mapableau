@@ -1,18 +1,11 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import { PlanSyncService } from "@/lib/services/ndia/plan-sync";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { requireAuth } from "@/lib/security/authorization-utils";
+import { requireAuth, UserRole } from "@/lib/security/authorization-utils";
+import { prisma } from "@/lib/prisma";
 
 export async function POST(req: Request) {
   try {
     const user = await requireAuth();
-    if (!user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
 
     const body = await req.json();
     const { participantId } = body;
@@ -26,8 +19,25 @@ export async function POST(req: Request) {
 
     // Verify user has access to this participant
     // (Participant themselves, plan manager, or admin)
-    const participant = await requireAuth();
-    // TODO: Add proper access control check
+    const isParticipant = user.id === participantId;
+    const isAdmin = user.role === UserRole.NDIA_ADMIN;
+    
+    // Check if user is a plan manager for this participant's plan
+    let isPlanManager = false;
+    if (!isParticipant && !isAdmin) {
+      const plan = await prisma.nDISPlan.findUnique({
+        where: { participantId },
+        select: { planManagerId: true },
+      });
+      isPlanManager = plan?.planManagerId === user.id;
+    }
+
+    if (!isParticipant && !isAdmin && !isPlanManager) {
+      return NextResponse.json(
+        { error: "Forbidden: You do not have access to this participant's plan" },
+        { status: 403 }
+      );
+    }
 
     const syncService = new PlanSyncService();
     const result = await syncService.syncPlan(participantId);

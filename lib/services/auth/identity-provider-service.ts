@@ -9,7 +9,6 @@ import { linkAccount, AccountLinkResult } from "./account-linker";
 import { issueToken, TokenIssuanceResult } from "./token-issuance-service";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import { getIdentityProviderCallbackUrl } from "../service-callbacks";
 import crypto from "crypto";
 
 export type IdentityProvider = "google" | "facebook" | "microsoft" | "wix";

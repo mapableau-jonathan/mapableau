@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revokeToken } from "@/lib/services/auth/token-issuance-service";
 import { serviceRegistry, ServiceId } from "@/lib/services/auth/service-registry";
 import { logger } from "@/lib/logger";
+import { extractTokenFromHeader, verifyToken } from "@/lib/auth/jwt-service";
 
 /**
  * POST /api/tokens/revoke
@@ -17,6 +18,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { tokenId, serviceId } = body;
 
+    // Validate required fields
     if (!tokenId || !serviceId) {
       return NextResponse.json(
         { error: "tokenId and serviceId are required" },
@@ -32,7 +34,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Revoke token
+    // Try to get user ID from token if provided
+    let userId: string | undefined;
+    const authHeader = request.headers.get("authorization");
+    if (authHeader) {
+      const token = extractTokenFromHeader(authHeader);
+      if (token) {
+        try {
+          const payload = verifyToken(token);
+          userId = payload.sub;
+        } catch {
+          // Token invalid, but we can still revoke by tokenId
+        }
+      }
+    }
+
+    // Revoke via service
     const result = await revokeToken(tokenId, serviceId as ServiceId);
 
     if (!result.success) {
@@ -42,7 +59,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    logger.info("Token revoked via API", { tokenId, serviceId });
+    logger.info("Token revoked via API", { tokenId, serviceId, userId });
 
     return NextResponse.json({
       success: true,
@@ -51,7 +68,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     logger.error("Token revocation endpoint error", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Internal server error" },
+      { error: error instanceof Error ? error.message : "Token revocation failed" },
       { status: 500 }
     );
   }

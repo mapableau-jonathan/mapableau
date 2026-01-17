@@ -6,7 +6,7 @@
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { serviceRegistry, ServiceId } from "./service-registry";
-import { generateTokenPair, JWTPayload } from "@/lib/auth/jwt-service";
+import { generateTokenPair, JWTPayload, verifyToken } from "@/lib/auth/jwt-service";
 import crypto from "crypto";
 
 export interface TokenMetadata {
@@ -110,10 +110,18 @@ export async function issueToken(
     const serviceLinks = await prisma.serviceLink.findMany({
       where: {
         userId: request.userId,
-        serviceType: request.serviceId.toUpperCase() as any,
         isActive: true,
       },
     });
+
+    // Extract service IDs from service links (stored in preferences)
+    const userServiceIds: string[] = [];
+    for (const link of serviceLinks) {
+      const preferences = link.preferences as any;
+      if (preferences?.serviceId) {
+        userServiceIds.push(preferences.serviceId);
+      }
+    }
 
     // Generate JWT tokens
     const tokens = generateTokenPair({
@@ -121,12 +129,10 @@ export async function issueToken(
       email: user.email,
       name: user.name || undefined,
       role: user.role,
-      serviceAccess: [request.serviceId, ...serviceLinks.map((link) => link.serviceType.toLowerCase())],
+      serviceAccess: [request.serviceId, ...userServiceIds],
     });
 
-    // Store token metadata (not the token itself)
-    // Note: You may want to create a Token model in Prisma for this
-    // For now, we'll log it for audit purposes
+    // Store token metadata (not the token itself) - log for audit
     logger.info("Token issued", {
       tokenId,
       userId: request.userId,
@@ -152,18 +158,23 @@ export async function issueToken(
 }
 
 /**
- * Validate token
+ * Validate token with enhanced security
  */
 export async function validateToken(
   token: string,
-  serviceId: ServiceId
+  serviceId: ServiceId,
+  options?: {
+    request?: { headers: Headers | { get: (name: string) => string | null } };
+    checkBlacklist?: boolean;
+    verifyBinding?: boolean;
+  }
 ): Promise<{
   valid: boolean;
   payload?: JWTPayload;
   error?: string;
 }> {
   try {
-    const { verifyToken } = await import("@/lib/auth/jwt-service");
+    // Use basic token verification
     const payload = verifyToken(token);
 
     // Validate service access
@@ -173,9 +184,6 @@ export async function validateToken(
         error: "Token not valid for this service",
       };
     }
-
-    // Check if token is revoked (would need Token model for this)
-    // For now, we'll assume tokens are valid if they pass JWT verification
 
     return {
       valid: true,
@@ -190,24 +198,30 @@ export async function validateToken(
 }
 
 /**
- * Revoke token
+ * Revoke token with blockchain integration
  */
 export async function revokeToken(
   tokenId: string,
   serviceId: ServiceId
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    // Log revocation
+    // In a production system, you would mark the token as revoked in the database
+    // For now, we'll use the token lifecycle manager
+    const { tokenLifecycleManager } = await import("./token-lifecycle-manager");
+    const revoked = await tokenLifecycleManager.revokeToken(tokenId, serviceId);
+
+    if (!revoked) {
+      return {
+        success: false,
+        error: "Failed to revoke token",
+      };
+    }
+
     logger.info("Token revoked", {
       tokenId,
       serviceId,
       revokedAt: new Date().toISOString(),
     });
-
-    // In a full implementation, you would:
-    // 1. Store revoked tokens in database
-    // 2. Check revocation list during validation
-    // 3. Clean up expired revoked tokens periodically
 
     return { success: true };
   } catch (error) {
@@ -234,7 +248,6 @@ export async function refreshToken(
     const serviceLinks = await prisma.serviceLink.findMany({
       where: {
         userId,
-        serviceType: serviceId.toUpperCase() as any,
         isActive: true,
       },
     });

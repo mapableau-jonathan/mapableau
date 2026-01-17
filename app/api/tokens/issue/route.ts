@@ -5,9 +5,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { issueToken, TokenIssuanceRequest } from "@/lib/services/auth/token-issuance-service";
-import { serviceRegistry } from "@/lib/services/auth/service-registry";
+import { serviceRegistry, ServiceId } from "@/lib/services/auth/service-registry";
 import { logger } from "@/lib/logger";
-import { authenticate } from "@/lib/auth/middleware";
 
 /**
  * POST /api/tokens/issue
@@ -15,19 +14,10 @@ import { authenticate } from "@/lib/auth/middleware";
  */
 export async function POST(request: NextRequest) {
   try {
-    // Authenticate service (using service credentials or service token)
-    const authHeader = request.headers.get("authorization");
-    if (!authHeader) {
-      return NextResponse.json(
-        { error: "Authorization required" },
-        { status: 401 }
-      );
-    }
-
-    // Parse request body
     const body = await request.json();
     const { userId, serviceId, scopes, expiresIn, clientId, clientSecret } = body;
 
+    // Validate required fields
     if (!userId || !serviceId) {
       return NextResponse.json(
         { error: "userId and serviceId are required" },
@@ -35,9 +25,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate service credentials if provided
+    // Validate service
+    if (!serviceRegistry.isEnabled(serviceId as ServiceId)) {
+      return NextResponse.json(
+        { error: "Service not found or disabled" },
+        { status: 400 }
+      );
+    }
+
+    // Authenticate service (using service credentials if provided)
     if (clientId && clientSecret) {
-      if (!serviceRegistry.validateCredentials(serviceId, clientId, clientSecret)) {
+      if (!serviceRegistry.validateCredentials(serviceId as ServiceId, clientId, clientSecret)) {
         return NextResponse.json(
           { error: "Invalid service credentials" },
           { status: 401 }
@@ -48,8 +46,8 @@ export async function POST(request: NextRequest) {
     // Issue token
     const result = await issueToken({
       userId,
-      serviceId,
-      scopes: scopes || [],
+      serviceId: serviceId as ServiceId,
+      scopes: Array.isArray(scopes) ? scopes : [],
       expiresIn,
       clientId,
       clientSecret,
@@ -62,7 +60,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Log token issuance
     logger.info("Token issued via API", {
       userId,
       serviceId,
@@ -79,7 +76,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     logger.error("Token issuance endpoint error", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Internal server error" },
+      { error: error instanceof Error ? error.message : "Token issuance failed" },
       { status: 500 }
     );
   }

@@ -70,20 +70,29 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     // SECURITY: Require admin or plan manager role to create policies
+    let hasAccess = false;
     try {
       await requireAdmin();
+      hasAccess = true;
     } catch {
       // If not admin, try plan manager
-      await requirePlanManager();
+      try {
+        await requirePlanManager();
+        hasAccess = true;
+      } catch {
+        // Neither admin nor plan manager - access denied
+        hasAccess = false;
+      }
+    }
+
+    if (!hasAccess) {
+      return NextResponse.json(
+        { error: "Forbidden: Admin or Plan Manager access required" },
+        { status: 403 }
+      );
     }
 
     const user = await requireAuth();
-    if (!user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
 
     const body = await req.json();
     const data = createPolicySchema.parse(body);

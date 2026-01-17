@@ -1,11 +1,19 @@
 /**
  * JWT Token Service
  * Centralized JWT token generation and validation for all services
+ * Enhanced with security features: token binding, replay prevention, tampering detection
  */
 
 import jwt from "jsonwebtoken";
 import { getEnv } from "@/lib/config/env";
 import { logger } from "@/lib/logger";
+import {
+  generateTokenId,
+  TokenBinding,
+  validateTokenFormat,
+  extractBindingFromRequest,
+} from "@/lib/security/token-security";
+import { isTokenBlacklisted } from "@/lib/security/token-blacklist";
 
 const env = getEnv();
 
@@ -15,6 +23,8 @@ export interface JWTPayload {
   name?: string;
   role?: string;
   serviceAccess?: string[]; // Services the user can access
+  jti?: string; // JWT ID - unique token identifier for replay prevention
+  binding?: TokenBinding; // Token binding for device/IP verification
   iat?: number;
   exp?: number;
   iss?: string;
@@ -28,16 +38,33 @@ export interface TokenPair {
 }
 
 /**
- * Generate JWT access token
+ * Generate JWT access token with security enhancements
  */
-export function generateAccessToken(payload: Omit<JWTPayload, "iat" | "exp" | "iss" | "aud">): string {
+export function generateAccessToken(
+  payload: Omit<JWTPayload, "iat" | "exp" | "iss" | "aud" | "jti">,
+  options?: {
+    binding?: TokenBinding;
+    request?: { headers: Headers | { get: (name: string) => string | null } };
+  }
+): string {
   const secret = process.env.JWT_SECRET || env.NEXTAUTH_SECRET;
   const expiresIn = process.env.JWT_EXPIRES_IN || "15m"; // 15 minutes default
   const issuer = process.env.JWT_ISSUER || "australian-disability-ltd";
   const audience = process.env.JWT_AUDIENCE || "australian-disability-services";
 
+  // Generate unique token ID for replay prevention
+  const jti = generateTokenId();
+
+  // Extract binding from request if provided
+  let binding = options?.binding;
+  if (!binding && options?.request) {
+    binding = extractBindingFromRequest(options.request);
+  }
+
   const tokenPayload: JWTPayload = {
     ...payload,
+    jti,
+    binding,
     iss: issuer,
     aud: audience,
   };
@@ -45,6 +72,7 @@ export function generateAccessToken(payload: Omit<JWTPayload, "iat" | "exp" | "i
   return jwt.sign(tokenPayload, secret, {
     expiresIn,
     algorithm: "HS256",
+    jwtid: jti, // Set JWT ID claim
   });
 }
 
@@ -62,12 +90,16 @@ export function generateRefreshToken(userId: string): string {
 }
 
 /**
- * Generate token pair (access + refresh)
+ * Generate token pair (access + refresh) with security enhancements
  */
 export function generateTokenPair(
-  payload: Omit<JWTPayload, "iat" | "exp" | "iss" | "aud">
+  payload: Omit<JWTPayload, "iat" | "exp" | "iss" | "aud" | "jti">,
+  options?: {
+    binding?: TokenBinding;
+    request?: { headers: Headers | { get: (name: string) => string | null } };
+  }
 ): TokenPair {
-  const accessToken = generateAccessToken(payload);
+  const accessToken = generateAccessToken(payload, options);
   const refreshToken = generateRefreshToken(payload.sub);
 
   // Calculate expiration time in seconds
@@ -82,9 +114,14 @@ export function generateTokenPair(
 }
 
 /**
- * Verify and decode JWT token
+ * Verify and decode JWT token (synchronous version for backward compatibility)
  */
 export function verifyToken(token: string): JWTPayload {
+  // Validate token format first (prevent injection attacks)
+  if (!validateTokenFormat(token)) {
+    throw new Error("Invalid token format");
+  }
+
   const secret = process.env.JWT_SECRET || env.NEXTAUTH_SECRET;
   const issuer = process.env.JWT_ISSUER || "australian-disability-ltd";
   const audience = process.env.JWT_AUDIENCE || "australian-disability-services";
@@ -103,6 +140,71 @@ export function verifyToken(token: string): JWTPayload {
     }
     if (error instanceof jwt.JsonWebTokenError) {
       throw new Error("Invalid token");
+    }
+    logger.error("Token verification error", error);
+    throw new Error("Token verification failed");
+  }
+}
+
+/**
+ * Verify and decode JWT token with enhanced security checks (async version)
+ */
+export async function verifyTokenSecure(
+  token: string,
+  options?: {
+    checkBlacklist?: boolean;
+    verifyBinding?: boolean;
+    request?: { headers: Headers | { get: (name: string) => string | null } };
+  }
+): Promise<JWTPayload> {
+  // Validate token format first (prevent injection attacks)
+  if (!validateTokenFormat(token)) {
+    throw new Error("Invalid token format");
+  }
+
+  const secret = process.env.JWT_SECRET || env.NEXTAUTH_SECRET;
+  const issuer = process.env.JWT_ISSUER || "australian-disability-ltd";
+  const audience = process.env.JWT_AUDIENCE || "australian-disability-services";
+
+  try {
+    const decoded = jwt.verify(token, secret, {
+      issuer,
+      audience,
+      algorithms: ["HS256"],
+    }) as JWTPayload;
+
+    // Check blacklist if enabled
+    if (options?.checkBlacklist !== false && decoded.jti) {
+      const blacklisted = await isTokenBlacklisted(decoded.jti);
+      if (blacklisted) {
+        throw new Error("Token has been revoked");
+      }
+    }
+
+    // Verify token binding if enabled
+    if (options?.verifyBinding && decoded.binding && options.request) {
+      const { verifyTokenBinding, extractBindingFromRequest } = await import(
+        "@/lib/security/token-security"
+      );
+      const currentBinding = extractBindingFromRequest(options.request);
+      if (!verifyTokenBinding(decoded.binding, currentBinding)) {
+        throw new Error("Token binding mismatch - possible token theft");
+      }
+    }
+
+    return decoded;
+  } catch (error) {
+    if (error instanceof jwt.TokenExpiredError) {
+      throw new Error("Token expired");
+    }
+    if (error instanceof jwt.JsonWebTokenError) {
+      throw new Error("Invalid token");
+    }
+    if (error instanceof Error && error.message.includes("revoked")) {
+      throw error;
+    }
+    if (error instanceof Error && error.message.includes("binding")) {
+      throw error;
     }
     logger.error("Token verification error", error);
     throw new Error("Token verification failed");

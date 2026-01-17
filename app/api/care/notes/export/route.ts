@@ -34,8 +34,8 @@ export async function GET(req: Request) {
 
     return new NextResponse(pdfContent, {
       headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="case-notes-${new Date().toISOString().split("T")[0]}.pdf"`,
+        "Content-Type": "text/plain",
+        "Content-Disposition": `attachment; filename="case-notes-${new Date().toISOString().split("T")[0]}.txt"`,
       },
     });
   } catch (error) {

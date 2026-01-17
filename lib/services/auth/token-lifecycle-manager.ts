@@ -43,9 +43,10 @@ class TokenLifecycleManager {
   /**
    * Add token to revocation list
    */
-  revokeToken(tokenId: string): void {
+  async revokeToken(tokenId: string, serviceId?: ServiceId): Promise<boolean> {
     this.revokedTokens.add(tokenId);
-    logger.info("Token added to revocation list", { tokenId });
+    logger.info("Token added to revocation list", { tokenId, serviceId });
+    return true;
   }
 
   /**

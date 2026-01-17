@@ -16,10 +16,26 @@ export async function POST(
 ) {
   try {
     // SECURITY: Require admin or plan manager role to report to NDIS
+    let hasAccess = false;
     try {
       await requireAdmin();
+      hasAccess = true;
     } catch {
-      await requirePlanManager();
+      // If not admin, try plan manager
+      try {
+        await requirePlanManager();
+        hasAccess = true;
+      } catch {
+        // Neither admin nor plan manager - access denied
+        hasAccess = false;
+      }
+    }
+
+    if (!hasAccess) {
+      return NextResponse.json(
+        { error: "Forbidden: Admin or Plan Manager access required" },
+        { status: 403 }
+      );
     }
 
     const body = await reportSchema.parse(await req.json());

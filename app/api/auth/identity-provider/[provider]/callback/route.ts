@@ -49,7 +49,16 @@ export async function GET(
     const callbackUrl = new URL(result.callbackUrl || "/dashboard", request.url);
     if (result.tokens?.accessToken) {
       callbackUrl.searchParams.set("token", result.tokens.accessToken);
-      callbackUrl.searchParams.set("serviceId", state.split(".")[0] || ""); // Extract serviceId from state
+      // Extract serviceId from state (state is base64url-encoded JSON)
+      try {
+        const stateData = JSON.parse(Buffer.from(state, "base64url").toString());
+        if (stateData.serviceId) {
+          callbackUrl.searchParams.set("serviceId", stateData.serviceId);
+        }
+      } catch {
+        // If state parsing fails, try legacy format or skip serviceId
+        // The handleCallback function already validated the state, so this is a fallback
+      }
     }
 
     // Set cookies for token storage
