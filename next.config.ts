@@ -8,6 +8,12 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: false, // Ensures type safety at build time
   },
+  // File upload configuration
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '10mb', // Allow up to 10MB file uploads
+    },
+  },
 };
 
 export default nextConfig;

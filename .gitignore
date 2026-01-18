@@ -77,3 +77,7 @@ yarn.lock
 # Logs
 logs
 *.log
+
+# Uploads
+/public/uploads/
+/uploads/

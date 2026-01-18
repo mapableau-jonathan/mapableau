@@ -70,21 +70,29 @@ export default function WorkerOnboardPage() {
   }>>([]);
 
   const handleFileUpload = async (type: string, file: File): Promise<string> => {
-    // In a real implementation, upload to S3 or similar
-    // For now, create a data URL
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = reader.result as string;
-        setDocuments((prev) => [
-          ...prev.filter((d) => d.type !== type),
-          { type, fileUrl: dataUrl },
-        ]);
-        resolve(dataUrl);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
+    // Upload file to server
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch("/api/upload", {
+      method: "POST",
+      body: formData,
     });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to upload file");
+    }
+
+    const data = await response.json();
+    const fileUrl = data.fileUrl;
+
+    setDocuments((prev) => [
+      ...prev.filter((d) => d.type !== type),
+      { type, fileUrl },
+    ]);
+
+    return fileUrl;
   };
 
   const handleSubmit = async () => {
