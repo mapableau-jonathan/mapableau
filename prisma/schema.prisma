@@ -45,8 +45,8 @@ model User {
   accounts              Account[]
   sessions              Session[]
   worker                Worker?
-  ndisPlan              NDISPlan? @relation("PlanParticipant", fields: [ndisPlanId], references: [id])
-  providerRegistration  ProviderRegistration? @relation(fields: [providerRegistrationId], references: [id])
+  ndisPlan              NDISPlan? @relation("PlanParticipant")
+  providerRegistration  ProviderRegistration?
   participantPayments   PaymentTransaction[] @relation("ParticipantPayments")
   providerPayments      PaymentTransaction[] @relation("ProviderPayments")
   providerRedemptions   RedemptionRequest[]
@@ -57,8 +57,8 @@ model User {
   participantComplaints Complaint[] @relation("ParticipantComplaints")
   participantRisks      Risk[] @relation("ParticipantRisks")
   participantCarePlans  CarePlan[] @relation("ParticipantCarePlans")
-  publisherAccount     Publisher?
-  advertiserAccount    Advertiser?
+  publisherAccount     Publisher? @relation("PublisherAccount")
+  advertiserAccount    Advertiser? @relation("AdvertiserAccount")
   businessReviews      BusinessReview[] @relation("BusinessReviewer")
   adCampaigns          AdCampaign[] @relation("CampaignOwner")
   businesses           Business[] @relation("BusinessOwner")
@@ -1410,4 +1410,26 @@ model SupportTicketResponse {
   @@index([ticketId])
   @@index([userId])
   @@index([createdAt])
+}
+
+// Notion Sync Mapping
+model NotionSyncMapping {
+  id                String   @id @default(cuid())
+  entityType         String   // "User", "NDISPlan", "CarePlan", "Incident", "Complaint", "Risk", "PaymentTransaction"
+  systemId          String   // ID in our system
+  notionPageId      String   // Notion page ID
+  notionDatabaseId  String   // Notion database ID
+  lastSyncedAt      DateTime @default(now())
+  syncDirection     String?  // "to_notion", "from_notion", "both"
+  conflictState     String?  // "none", "pending", "resolved"
+  lastModifiedAt    DateTime? // Last modification timestamp from system
+  notionLastEditedAt DateTime? // Last edited time from Notion
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([entityType, systemId])
+  @@index([notionPageId])
+  @@index([entityType])
+  @@index([systemId])
+  @@index([conflictState])
 }

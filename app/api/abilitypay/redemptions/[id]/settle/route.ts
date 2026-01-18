@@ -11,13 +11,9 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    // requireAuth() throws an error if user is not authenticated, it never returns null
+    // No need to check if (!user) - it will throw if not authenticated
     const user = await requireAuth();
-    if (!user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
 
     // Get redemption to verify ownership
     const { prisma } = await import("@/lib/prisma");

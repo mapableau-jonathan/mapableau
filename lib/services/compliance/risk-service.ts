@@ -53,6 +53,15 @@ export class RiskService {
       },
     });
 
+    // Trigger Notion sync
+    try {
+      const { onRiskCreated } = await import("../notion/event-listeners");
+      await onRiskCreated(risk.id);
+    } catch (error) {
+      // Don't fail if Notion sync fails
+      console.warn("Failed to trigger Notion sync for risk", error);
+    }
+
     return risk;
   }
 
@@ -141,6 +150,15 @@ export class RiskService {
       where: { id: riskId },
       data,
     });
+
+    // Trigger Notion sync
+    try {
+      const { onRiskUpdated } = await import("../notion/event-listeners");
+      await onRiskUpdated(risk.id);
+    } catch (error) {
+      // Don't fail if Notion sync fails
+      console.warn("Failed to trigger Notion sync for risk update", error);
+    }
 
     return risk;
   }

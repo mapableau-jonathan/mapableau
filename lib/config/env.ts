@@ -96,6 +96,45 @@ const envSchema = z.object({
 
   // OAuth2 User Info (optional)
   OAUTH2_USERINFO_URL: z.string().url().optional(),
+
+  // Notion Integration (optional)
+  NOTION_API_KEY: z.string().optional(),
+  NOTION_WEBHOOK_SECRET: z.string().optional(),
+  NOTION_SYNC_ENABLED: z.string().optional(),
+  NOTION_CONFLICT_STRATEGY: z.enum(["last-write-wins", "timestamp-based", "manual-review"]).optional(),
+  NOTION_PARTICIPANTS_DB_ID: z.string().optional(),
+  NOTION_NDIS_PLANS_DB_ID: z.string().optional(),
+  NOTION_CARE_PLANS_DB_ID: z.string().optional(),
+  NOTION_INCIDENTS_DB_ID: z.string().optional(),
+  NOTION_COMPLAINTS_DB_ID: z.string().optional(),
+  NOTION_RISKS_DB_ID: z.string().optional(),
+  NOTION_PAYMENTS_DB_ID: z.string().optional(),
+  NOTION_SYNC_PARTICIPANTS: z.string().optional(),
+  NOTION_SYNC_NDIS_PLANS: z.string().optional(),
+  NOTION_SYNC_CARE_PLANS: z.string().optional(),
+  NOTION_SYNC_INCIDENTS: z.string().optional(),
+  NOTION_SYNC_COMPLAINTS: z.string().optional(),
+  NOTION_SYNC_RISKS: z.string().optional(),
+  NOTION_SYNC_PAYMENTS: z.string().optional(),
+
+  // Salesforce Integration (optional)
+  SALESFORCE_CLIENT_ID: z.string().optional(),
+  SALESFORCE_CLIENT_SECRET: z.string().optional(),
+  SALESFORCE_USERNAME: z.string().optional(),
+  SALESFORCE_PASSWORD: z.string().optional(),
+  SALESFORCE_SECURITY_TOKEN: z.string().optional(),
+  SALESFORCE_LOGIN_URL: z.string().url().optional(), // Default: https://login.salesforce.com
+  SALESFORCE_INSTANCE_URL: z.string().url().optional(), // Will be set after OAuth
+  SALESFORCE_API_VERSION: z.string().optional(), // Default: v59.0
+  SALESFORCE_CALLBACK_URL: z.string().url().optional(),
+  SALESFORCE_SYNC_ENABLED: z.string().optional(),
+  SALESFORCE_SYNC_PARTICIPANTS: z.string().optional(),
+  SALESFORCE_SYNC_NDIS_PLANS: z.string().optional(),
+  SALESFORCE_SYNC_CARE_PLANS: z.string().optional(),
+  SALESFORCE_SYNC_INCIDENTS: z.string().optional(),
+  SALESFORCE_SYNC_COMPLAINTS: z.string().optional(),
+  SALESFORCE_SYNC_RISKS: z.string().optional(),
+  SALESFORCE_SYNC_PAYMENTS: z.string().optional(),
 });
 
 type Env = z.infer<typeof envSchema>;

@@ -32,6 +32,19 @@ export class PaymentService {
   private tokenService: TokenService;
   private paymentProviderService?: PaymentProviderService;
 
+  /**
+   * Helper to trigger Notion sync for payment (non-blocking)
+   */
+  private async triggerPaymentSync(paymentId: string): Promise<void> {
+    try {
+      const { onPaymentUpdated } = await import("../notion/event-listeners");
+      await onPaymentUpdated(paymentId);
+    } catch (error) {
+      // Don't fail if Notion sync fails
+      console.warn("Failed to trigger Notion sync for payment update", error);
+    }
+  }
+
   constructor(
     blockchainConfig: BlockchainAdapterConfig,
     paymentProviderConfig?: {
@@ -384,6 +397,15 @@ export class PaymentService {
       },
     });
 
+    // Trigger Notion sync
+    try {
+      const { onPaymentCreated } = await import("../notion/event-listeners");
+      await onPaymentCreated(transaction.id);
+    } catch (error) {
+      // Don't fail if Notion sync fails
+      console.warn("Failed to trigger Notion sync for payment", error);
+    }
+
     return transaction;
   }
 
@@ -465,6 +487,7 @@ export class PaymentService {
           validationResult: validation as any,
         },
       });
+      await this.triggerPaymentSync(transactionId);
       throw new Error(`Payment validation failed: ${validation.errors.join(", ")}`);
     }
 
@@ -548,6 +571,9 @@ export class PaymentService {
 
         return updated;
       });
+
+      // Trigger Notion sync
+      await this.triggerPaymentSync(transactionId);
 
       return completedTransaction;
     } catch (error: any) {

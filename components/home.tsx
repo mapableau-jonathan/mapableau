@@ -15,6 +15,7 @@ import {
 import Link from "next/link";
 
 import Footer from "@/components/footer";
+import { ServicesCarousel } from "@/components/modules/ServicesCarousel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -170,7 +171,9 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="max-w-6xl mx-auto">{/* <ServicesCarousel /> */}</div>
+          <div className="max-w-6xl mx-auto">
+            <ServicesCarousel />
+          </div>
         </div>
       </section>
 

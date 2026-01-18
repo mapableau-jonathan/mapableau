@@ -196,6 +196,15 @@ export async function PATCH(
       },
     });
 
+    // Trigger Notion sync
+    try {
+      const { onCarePlanUpdated } = await import("@/lib/services/notion/event-listeners");
+      await onCarePlanUpdated(updatedPlan.id);
+    } catch (error) {
+      // Don't fail if Notion sync fails
+      console.warn("Failed to trigger Notion sync for care plan update", error);
+    }
+
     return NextResponse.json(updatedPlan);
   } catch (error: any) {
     if (error instanceof z.ZodError) {

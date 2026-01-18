@@ -71,6 +71,8 @@ export async function POST(req: Request) {
     const service = new ComplaintService();
     const complaint = await service.createComplaint(data);
 
+    // Note: Notion sync is triggered in ComplaintService.createComplaint
+
     return NextResponse.json(complaint, { status: 201 });
   } catch (error) {
     console.error("Error creating complaint:", error);

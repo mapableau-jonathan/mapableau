@@ -53,6 +53,15 @@ export class ComplaintService {
       },
     });
 
+    // Trigger Notion sync
+    try {
+      const { onComplaintCreated } = await import("../notion/event-listeners");
+      await onComplaintCreated(complaint.id);
+    } catch (error) {
+      // Don't fail if Notion sync fails
+      console.warn("Failed to trigger Notion sync for complaint", error);
+    }
+
     return complaint;
   }
 
@@ -182,6 +191,15 @@ export class ComplaintService {
         satisfactionRating: data.satisfactionRating,
       },
     });
+
+    // Trigger Notion sync
+    try {
+      const { onComplaintUpdated } = await import("../notion/event-listeners");
+      await onComplaintUpdated(complaint.id);
+    } catch (error) {
+      // Don't fail if Notion sync fails
+      console.warn("Failed to trigger Notion sync for complaint update", error);
+    }
 
     return complaint;
   }

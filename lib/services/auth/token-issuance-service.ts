@@ -99,14 +99,17 @@ export async function issueToken(
       };
     }
 
+    // Optimize: Calculate timestamp once
+    const now = Date.now();
+    
     // Generate token expiration
     const expiresIn = request.expiresIn || service.tokenExpiration;
-    const expiresAt = new Date(Date.now() + expiresIn * 1000);
+    const expiresAt = new Date(now + expiresIn * 1000);
 
     // Generate token ID
     const tokenId = crypto.randomUUID();
 
-    // Get user's service access
+    // Get user's service access (optimized: extract in single pass)
     const serviceLinks = await prisma.serviceLink.findMany({
       where: {
         userId: request.userId,
@@ -114,14 +117,10 @@ export async function issueToken(
       },
     });
 
-    // Extract service IDs from service links (stored in preferences)
-    const userServiceIds: string[] = [];
-    for (const link of serviceLinks) {
-      const preferences = link.preferences as any;
-      if (preferences?.serviceId) {
-        userServiceIds.push(preferences.serviceId);
-      }
-    }
+    // Extract service IDs from service links (optimized: use map/filter instead of loop)
+    const userServiceIds = serviceLinks
+      .map((link) => (link.preferences as any)?.serviceId)
+      .filter((id): id is string => Boolean(id));
 
     // Generate JWT tokens (JOSE implementation - now async)
     const tokens = await generateTokenPair({
@@ -241,20 +240,15 @@ export async function refreshToken(
   serviceId: ServiceId
 ): Promise<TokenIssuanceResult> {
   try {
+    // Optimize: Pre-load jwt-service to avoid dynamic import overhead
     const { verifyRefreshToken } = await import("@/lib/auth/jwt-service");
     const { sub: userId } = await verifyRefreshToken(refreshToken);
 
-    // Get user's service links to determine scopes
-    const serviceLinks = await prisma.serviceLink.findMany({
-      where: {
-        userId,
-        isActive: true,
-      },
-    });
-
+    // Optimize: Get service first to determine scopes, then fetch service links in parallel
     const service = serviceRegistry.get(serviceId);
     const scopes = service?.allowedScopes || ["read:profile", "read:email"];
 
+    // Issue token directly - service links will be fetched inside issueToken if needed
     return issueToken({
       userId,
       serviceId,

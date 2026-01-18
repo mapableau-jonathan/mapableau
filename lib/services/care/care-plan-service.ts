@@ -168,6 +168,15 @@ export class CarePlanService {
       },
     });
 
+    // Trigger Notion sync
+    try {
+      const { onCarePlanUpdated } = await import("../notion/event-listeners");
+      await onCarePlanUpdated(carePlan.id);
+    } catch (error) {
+      // Don't fail if Notion sync fails
+      console.warn("Failed to trigger Notion sync for care plan update", error);
+    }
+
     return carePlan;
   }
 

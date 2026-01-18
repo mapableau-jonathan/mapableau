@@ -121,6 +121,15 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Trigger Notion sync
+    try {
+      const { onCarePlanCreated } = await import("@/lib/services/notion/event-listeners");
+      await onCarePlanCreated(carePlan.id);
+    } catch (error) {
+      // Don't fail if Notion sync fails
+      console.warn("Failed to trigger Notion sync for care plan", error);
+    }
+
     return NextResponse.json(carePlan, { status: 201 });
   } catch (error: any) {
     if (error instanceof z.ZodError) {

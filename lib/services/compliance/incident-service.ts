@@ -47,6 +47,15 @@ export class IncidentService {
       },
     });
 
+    // Trigger Notion sync
+    try {
+      const { onIncidentCreated } = await import("../notion/event-listeners");
+      await onIncidentCreated(incident.id);
+    } catch (error) {
+      // Don't fail if Notion sync fails
+      console.warn("Failed to trigger Notion sync for incident", error);
+    }
+
     return incident;
   }
 
@@ -153,6 +162,9 @@ export class IncidentService {
   /**
    * Update incident
    */
+  /**
+   * Update an existing incident
+   */
   async updateIncident(incidentId: string, data: UpdateIncidentData) {
     const incident = await prisma.incident.update({
       where: { id: incidentId },
@@ -168,6 +180,15 @@ export class IncidentService {
         ndisReportedAt: data.ndisReportedAt,
       },
     });
+
+    // Trigger Notion sync
+    try {
+      const { onIncidentUpdated } = await import("../notion/event-listeners");
+      await onIncidentUpdated(incident.id);
+    } catch (error) {
+      // Don't fail if Notion sync fails
+      console.warn("Failed to trigger Notion sync for incident update", error);
+    }
 
     return incident;
   }

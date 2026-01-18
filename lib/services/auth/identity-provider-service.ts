@@ -29,20 +29,28 @@ export interface AuthCallbackResult {
 }
 
 /**
- * Generate secure state token
+ * Generate secure state token (optimized: cache base URL)
  */
-function generateStateToken(serviceId: ServiceId, callbackUrl: string, nonce: string): string {
-  const state = {
-    serviceId,
-    callbackUrl,
-    nonce,
-    timestamp: Date.now(),
-  };
-  return Buffer.from(JSON.stringify(state)).toString("base64url");
+let cachedBaseUrl: string | null = null;
+function getBaseUrl(): string {
+  if (!cachedBaseUrl) {
+    cachedBaseUrl = process.env.AD_ID_DOMAIN || process.env.NEXTAUTH_URL || "";
+  }
+  return cachedBaseUrl;
 }
 
 /**
- * Parse state token
+ * Generate secure state token
+ */
+function generateStateToken(serviceId: ServiceId, callbackUrl: string, nonce: string): string {
+  // Optimize: use object literal directly instead of intermediate variable
+  return Buffer.from(
+    JSON.stringify({ serviceId, callbackUrl, nonce, timestamp: Date.now() })
+  ).toString("base64url");
+}
+
+/**
+ * Parse state token (optimized: early return on parse failure)
  */
 function parseStateToken(state: string): {
   serviceId?: ServiceId;
@@ -66,7 +74,7 @@ export async function initiateAuth(
   callbackUrl?: string
 ): Promise<AuthInitiationResult> {
   try {
-    // Validate service
+    // Validate service (early return for invalid service)
     const service = serviceRegistry.get(serviceId);
     if (!service || !service.enabled) {
       return {
@@ -78,7 +86,7 @@ export async function initiateAuth(
     // Use service callback URL if not provided
     const finalCallbackUrl = callbackUrl || service.callbackUrl;
 
-    // Validate callback URL
+    // Validate callback URL (early return for invalid URL)
     if (!serviceRegistry.validateCallbackUrl(serviceId, finalCallbackUrl)) {
       return {
         success: false,
@@ -115,11 +123,11 @@ export async function initiateAuth(
 }
 
 /**
- * Get provider-specific authentication URL
+ * Get provider-specific authentication URL (optimized: use cached base URL)
  */
 function getProviderAuthUrl(provider: IdentityProvider, state: string): string | null {
   const env = process.env;
-  const baseUrl = env.AD_ID_DOMAIN || env.NEXTAUTH_URL || "";
+  const baseUrl = getBaseUrl();
 
   switch (provider) {
     case "google":
@@ -223,15 +231,18 @@ export async function handleCallback(
       };
     }
 
-    // Create service link if doesn't exist
-    await ensureServiceLink(linkResult.userId, serviceId);
+    // Create service link if doesn't exist (optimized: run in parallel with token issuance prep)
+    const serviceLinkPromise = ensureServiceLink(linkResult.userId, serviceId);
 
-    // Issue service token
-    const tokenResult = await issueToken({
-      userId: linkResult.userId,
-      serviceId,
-      scopes: service?.allowedScopes || ["read:profile", "read:email"],
-    });
+    // Issue service token (run in parallel with service link creation)
+    const [tokenResult] = await Promise.all([
+      issueToken({
+        userId: linkResult.userId,
+        serviceId,
+        scopes: service?.allowedScopes || ["read:profile", "read:email"],
+      }),
+      serviceLinkPromise, // Ensure service link is created
+    ]);
 
     if (!tokenResult.success) {
       return {
@@ -240,10 +251,12 @@ export async function handleCallback(
       };
     }
 
-    // Sync Wix user data if provider is Wix
+    // Sync Wix user data if provider is Wix (non-blocking - don't wait for it)
     if (provider === "wix" && profileResult.accessToken) {
       const { syncWixUserData } = await import("./wix-user-sync");
-      await syncWixUserData(linkResult.userId);
+      syncWixUserData(linkResult.userId).catch((err) => {
+        logger.error("Wix user sync failed (non-blocking)", err);
+      });
     }
 
     return {
@@ -275,7 +288,7 @@ async function exchangeCodeForProfile(
   error?: string;
 }> {
   const env = process.env;
-  const baseUrl = env.AD_ID_DOMAIN || env.NEXTAUTH_URL || "";
+  const baseUrl = getBaseUrl(); // Use cached base URL
 
   try {
     switch (provider) {
@@ -340,7 +353,90 @@ async function exchangeCodeForProfile(
         };
       }
 
-      // Similar implementations for Facebook and Microsoft...
+      case "facebook": {
+        const tokenResponse = await fetch("https://graph.facebook.com/v18.0/oauth/access_token", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            code,
+            client_id: env.FACEBOOK_CLIENT_ID!,
+            client_secret: env.FACEBOOK_CLIENT_SECRET!,
+            redirect_uri: `${baseUrl}/api/auth/identity-provider/facebook/callback`,
+          }),
+        });
+
+        if (!tokenResponse.ok) {
+          return { success: false, error: "Failed to exchange code for token" };
+        }
+
+        const tokenData = await tokenResponse.json();
+        const profileResponse = await fetch(
+          `https://graph.facebook.com/v18.0/me?fields=id,name,email,picture&access_token=${tokenData.access_token}`
+        );
+
+        if (!profileResponse.ok) {
+          return { success: false, error: "Failed to get user profile" };
+        }
+
+        const profile = await profileResponse.json();
+        return {
+          success: true,
+          accessToken: tokenData.access_token,
+          refreshToken: tokenData.refresh_token,
+          profile: {
+            id: profile.id,
+            email: profile.email,
+            name: profile.name,
+            picture: profile.picture?.data?.url,
+          },
+        };
+      }
+
+      case "microsoft": {
+        const tenantId = env.AZURE_AD_TENANT_ID || "common";
+        const tokenResponse = await fetch(
+          `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+              code,
+              client_id: env.AZURE_AD_CLIENT_ID!,
+              client_secret: env.AZURE_AD_CLIENT_SECRET!,
+              redirect_uri: `${baseUrl}/api/auth/identity-provider/microsoft/callback`,
+              grant_type: "authorization_code",
+              scope: "openid profile email",
+            }),
+          }
+        );
+
+        if (!tokenResponse.ok) {
+          return { success: false, error: "Failed to exchange code for token" };
+        }
+
+        const tokenData = await tokenResponse.json();
+        const profileResponse = await fetch("https://graph.microsoft.com/v1.0/me", {
+          headers: { Authorization: `Bearer ${tokenData.access_token}` },
+        });
+
+        if (!profileResponse.ok) {
+          return { success: false, error: "Failed to get user profile" };
+        }
+
+        const profile = await profileResponse.json();
+        return {
+          success: true,
+          accessToken: tokenData.access_token,
+          refreshToken: tokenData.refresh_token,
+          profile: {
+            id: profile.id,
+            email: profile.mail || profile.userPrincipalName,
+            name: profile.displayName,
+            picture: null, // Microsoft Graph doesn't provide picture in basic profile
+          },
+        };
+      }
+
       default:
         return { success: false, error: "Provider not implemented" };
     }

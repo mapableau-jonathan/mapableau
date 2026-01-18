@@ -13,23 +13,23 @@ import { logger } from "@/lib/logger";
  */
 export async function GET(request: NextRequest) {
   try {
+    const serviceId = (request.nextUrl.searchParams.get("serviceId") || "mapable") as any;
     const callbackUrl = request.nextUrl.searchParams.get("callback") || "/dashboard";
 
-    return new Promise<NextResponse>((resolve) => {
-      passport.authenticate("google", {
-        session: false,
-        state: Buffer.from(JSON.stringify({ callbackUrl })).toString("base64"),
-      })(request as any, {} as any, (err: any) => {
-        if (err) {
-          logger.error("Google SSO initiation error", err);
-          return resolve(
-            NextResponse.json({ error: "SSO initiation failed" }, { status: 500 })
-          );
-        }
-        // Passport will handle the redirect
-        return resolve(NextResponse.json({ error: "Redirect required" }, { status: 500 }));
-      });
-    });
+    // Use identity provider service instead of direct Passport
+    const { initiateAuth } = await import("@/lib/services/auth/identity-provider-service");
+
+    const result = await initiateAuth("google", serviceId, callbackUrl);
+
+    if (!result.success || !result.authUrl) {
+      return NextResponse.json(
+        { error: result.error || "SSO initiation failed" },
+        { status: 500 }
+      );
+    }
+
+    // Redirect to OAuth provider
+    return NextResponse.redirect(result.authUrl);
   } catch (error) {
     logger.error("Google SSO endpoint error", error);
     return NextResponse.json(

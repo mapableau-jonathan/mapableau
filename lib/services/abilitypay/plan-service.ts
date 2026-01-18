@@ -101,6 +101,15 @@ export class PlanService {
       return newPlan;
     });
 
+    // Trigger Notion sync
+    try {
+      const { onNDISPlanCreated } = await import("../notion/event-listeners");
+      await onNDISPlanCreated(plan.id);
+    } catch (error) {
+      // Don't fail if Notion sync fails
+      console.warn("Failed to trigger Notion sync for NDIS plan", error);
+    }
+
     return plan;
   }
 
@@ -321,6 +330,9 @@ export class PlanService {
   /**
    * Update plan status
    */
+  /**
+   * Update plan status
+   */
   async updatePlanStatus(
     planId: string,
     status: "ACTIVE" | "SUSPENDED" | "EXPIRED" | "CANCELLED"
@@ -329,6 +341,15 @@ export class PlanService {
       where: { id: planId },
       data: { status },
     });
+
+    // Trigger Notion sync
+    try {
+      const { onNDISPlanUpdated } = await import("../notion/event-listeners");
+      await onNDISPlanUpdated(plan.id);
+    } catch (error) {
+      // Don't fail if Notion sync fails
+      console.warn("Failed to trigger Notion sync for NDIS plan update", error);
+    }
 
     return plan;
   }

@@ -81,6 +81,8 @@ export async function POST(req: Request) {
       reportedBy: session.user.id,
     });
 
+    // Note: Notion sync is triggered in IncidentService.createIncident
+
     return NextResponse.json(incident, { status: 201 });
   } catch (error) {
     console.error("Error creating incident:", error);
