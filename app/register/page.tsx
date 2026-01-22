@@ -30,7 +30,7 @@ export default function RegisterPage() {
       }
 
       // Automatically sign in after registration
-      await signIn("Credentials", {
+      await signIn("credentials", {
         email,
         password,
         callbackUrl: "/dashboard",
