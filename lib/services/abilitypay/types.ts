@@ -1,5 +1,5 @@
 /**
- * AbilityPay Protocol Types
+ * AbilityPay Types
  * Core type definitions for the blockchain-based NDIS payment system
  */
 
@@ -27,7 +27,7 @@ export interface TokenBalance {
   address: string;
 }
 
-export type BlockchainProvider = "ethereum" | "hyperledger" | "polygon" | "mock";
+export type BlockchainProvider = "ethereum" | "hyperledger" | "polygon" | "mock" | "payment-network";
 
 export interface BlockchainConfig {
   provider: BlockchainProvider;

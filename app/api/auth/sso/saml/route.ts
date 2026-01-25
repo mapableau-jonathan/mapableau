@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
-import crypto from "crypto";
+import { ServiceId } from "@/lib/services/auth/service-registry";
 
 /**
  * GET /api/auth/sso/saml
@@ -16,31 +16,34 @@ export async function GET(request: NextRequest) {
     const serviceId = request.nextUrl.searchParams.get("serviceId") || "mapable";
     const callbackUrl = request.nextUrl.searchParams.get("callback") || "/dashboard";
 
-    // Use identity provider service for SAML
-    // Note: SAML uses different flow, but we'll use the service for consistency
+    // Use SAML service for comprehensive SAML SSO
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/90906fb2-e03f-4462-b777-c144956c4be9',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/api/auth/sso/saml/route.ts:20',message:'importing SAML service',data:{serviceId,callbackUrl,hypothesis:'B'},timestamp:Date.now(),sessionId:'debug-session',runId:'initial',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
+    const { initiateSAML } = await import("@/lib/services/auth/saml-service");
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/90906fb2-e03f-4462-b777-c144956c4be9',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/api/auth/sso/saml/route.ts:22',message:'calling initiateSAML',data:{hasInitiateSAML:typeof initiateSAML==='function',hypothesis:'B'},timestamp:Date.now(),sessionId:'debug-session',runId:'initial',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
+    const result = await initiateSAML(serviceId as ServiceId, callbackUrl);
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/90906fb2-e03f-4462-b777-c144956c4be9',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/api/auth/sso/saml/route.ts:25',message:'initiateSAML result',data:{success:result?.success,hasRedirectUrl:!!result?.redirectUrl,error:result?.error,hypothesis:'B'},timestamp:Date.now(),sessionId:'debug-session',runId:'initial',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
 
-    // For SAML, we need to use the SAML-specific initiation
-    // This is a simplified version - in production, use proper SAML library
-    const { getMediaWikiAuthUrl } = await import("@/lib/services/auth/mediawiki-integration-enhanced");
-    const state = Buffer.from(
-      JSON.stringify({
-        serviceId,
-        callbackUrl,
-        nonce: crypto.randomBytes(16).toString("hex"),
-        timestamp: Date.now(),
-      })
-    ).toString("base64url");
-
-    const authUrl = getMediaWikiAuthUrl(state);
-
-    if (!authUrl) {
+    if (!result.success || !result.redirectUrl) {
+      logger.error("SAML initiation failed", { serviceId, error: result.error });
       return NextResponse.json(
-        { error: "SAML OAuth not configured" },
-        { status: 500 }
+        { 
+          error: result.error || "SAML SSO initiation failed",
+          message: result.error?.includes("not configured") 
+            ? "SAML is not configured. Please set SAML_ENTRY_POINT environment variable."
+            : "Failed to initiate SAML SSO"
+        },
+        { status: result.error?.includes("not configured") ? 503 : 500 } // 503 Service Unavailable if not configured
       );
     }
 
-    return NextResponse.redirect(authUrl);
+    // Redirect to IdP SSO endpoint with SAMLRequest
+    return NextResponse.redirect(result.redirectUrl);
   } catch (error) {
     logger.error("SAML SSO endpoint error", error);
     return NextResponse.json(

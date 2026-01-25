@@ -12,7 +12,7 @@ import { z } from "zod";
 import { logger } from "@/lib/logger";
 
 const totpService = new TOTPService({
-  issuer: process.env.TOTP_ISSUER || "AbilityPay Protocol",
+  issuer: process.env.TOTP_ISSUER || "AbilityPay",
 });
 
 const verifySetupSchema = z.object({
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
       // Generate new TOTP secret
       const secret = await totpService.generateSecret(session.user.id, {
         label: session.user.email || session.user.id,
-        issuer: process.env.TOTP_ISSUER || "AbilityPay Protocol",
+        issuer: process.env.TOTP_ISSUER || "AbilityPay",
       });
 
       return NextResponse.json({

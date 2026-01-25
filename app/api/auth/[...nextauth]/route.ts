@@ -98,50 +98,70 @@ export const authOptions: AuthOptions = {
   },
   callbacks: {
     async signIn({ user, account, profile }) {
-      // Allow OAuth sign-ins
-      if (account?.provider !== "credentials") {
+      try {
+        // Allow OAuth sign-ins
+        if (account?.provider !== "credentials") {
+          return true;
+        }
+        // For credentials, the authorize function handles validation
         return true;
+      } catch (error) {
+        logger.error("SignIn callback error", error);
+        return false;
       }
-      // For credentials, the authorize function handles validation
-      return true;
     },
     async jwt({ token, user, account, profile }) {
-      // Initial sign in
-      if (user) {
-        token.id = user.id;
-        token.email = user.email;
-        token.name = user.name;
-        token.picture = user.image;
-        
-        // Fetch and cache user role to avoid DB queries on every request
-        // Only fetch on initial sign-in or if role is missing
-        if (!token.role) {
-          const dbUser = await prisma.user.findUnique({
-            where: { id: user.id },
-            select: { role: true },
-          });
-          token.role = dbUser?.role || null;
+      try {
+        // Initial sign in
+        if (user) {
+          token.id = user.id;
+          token.email = user.email;
+          token.name = user.name;
+          token.picture = user.image;
+          
+          // Fetch and cache user role to avoid DB queries on every request
+          // Only fetch on initial sign-in or if role is missing
+          if (!token.role) {
+            try {
+              const dbUser = await prisma.user.findUnique({
+                where: { id: user.id },
+                select: { role: true },
+              });
+              token.role = dbUser?.role || null;
+            } catch (dbError) {
+              logger.error("Error fetching user role", dbError);
+              token.role = null;
+            }
+          }
         }
+        
+        // Add provider info for OAuth users
+        if (account) {
+          token.provider = account.provider;
+          token.providerAccountId = account.providerAccountId;
+        }
+        
+        return token;
+      } catch (error) {
+        logger.error("JWT callback error", error);
+        return token;
       }
-      
-      // Add provider info for OAuth users
-      if (account) {
-        token.provider = account.provider;
-        token.providerAccountId = account.providerAccountId;
-      }
-      
-      return token;
     },
     async session({ session, token }) {
-      if (token && session.user) {
-        session.user.id = token.id as string;
-        session.user.email = token.email as string;
-        session.user.name = token.name as string;
-        session.user.image = token.picture as string | undefined;
-        // Include role in session to avoid DB queries
-        session.user.role = token.role as string | null;
+      try {
+        if (token && session.user) {
+          session.user.id = token.id as string;
+          session.user.email = token.email as string;
+          session.user.name = token.name as string;
+          session.user.image = token.picture as string | undefined;
+          // Include role in session to avoid DB queries
+          session.user.role = token.role as string | null;
+        }
+        return session;
+      } catch (error) {
+        logger.error("Session callback error", error);
+        return session;
       }
-      return session;
     },
   },
 };

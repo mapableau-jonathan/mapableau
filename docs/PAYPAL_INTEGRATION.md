@@ -1,6 +1,6 @@
 # PayPal Integration
 
-The AbilityPay Protocol now supports PayPal payments with full webhook integration for payment processing.
+The AbilityPay now supports PayPal payments with full webhook integration for payment processing.
 
 ## Overview
 

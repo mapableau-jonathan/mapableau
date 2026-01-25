@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyRefreshToken, generateTokenPair } from "@/lib/auth/jwt-service";
 import { getUserServices } from "@/lib/auth/sso-service";
 import { prisma } from "@/lib/prisma";
-import { logger } from "@/lib/logger";
+import { createAuthErrorResponse } from "@/lib/auth/error-handler";
 
 /**
  * POST /api/auth/passport/refresh
@@ -22,10 +22,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Refresh token is required" }, { status: 400 });
     }
 
-    // Verify refresh token
-    const { sub: userId } = verifyRefreshToken(refreshToken);
+    const { sub: userId } = await verifyRefreshToken(refreshToken);
 
-    // Get user
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -41,11 +39,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Get user's service access
     const services = await getUserServices(user.id);
-
-    // Generate new token pair
-    const tokens = generateTokenPair({
+    const tokens = await generateTokenPair({
       sub: user.id,
       email: user.email,
       name: user.name,
@@ -53,20 +48,8 @@ export async function POST(request: NextRequest) {
       serviceAccess: services,
     });
 
-    return NextResponse.json({
-      success: true,
-      tokens,
-    });
+    return NextResponse.json({ success: true, tokens });
   } catch (error) {
-    logger.error("Refresh token endpoint error", error);
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to refresh token",
-      },
-      { status: 401 }
-    );
+    return createAuthErrorResponse(error, "Failed to refresh token", 401);
   }
 }

@@ -1,6 +1,6 @@
 # Two-Factor Authentication (2FA) with Google Authenticator
 
-The AbilityPay Protocol now includes TOTP-based two-factor authentication compatible with Google Authenticator and other TOTP apps.
+The AbilityPay now includes TOTP-based two-factor authentication compatible with Google Authenticator and other TOTP apps.
 
 ## Overview
 
@@ -29,7 +29,7 @@ Two-factor authentication adds an extra layer of security by requiring a time-ba
 
 ```env
 # Optional: Customize 2FA issuer name
-TOTP_ISSUER="AbilityPay Protocol"
+TOTP_ISSUER="AbilityPay"
 ```
 
 ### Required Packages

@@ -5,6 +5,7 @@
 
 import { prisma } from "@/lib/prisma";
 import type { BusinessCategory } from "@prisma/client";
+import { BaseAnalyticsService } from "../analytics/base-analytics-service";
 
 export interface PublisherAnalytics {
   summary: {
@@ -84,6 +85,12 @@ export interface AdvertiserAnalytics {
 }
 
 export class AnalyticsService {
+  private baseAnalytics: BaseAnalyticsService;
+
+  constructor() {
+    this.baseAnalytics = new BaseAnalyticsService();
+  }
+
   /**
    * Get publisher analytics
    */
@@ -139,7 +146,7 @@ export class AnalyticsService {
       };
     });
 
-    const ctr = totalImpressions > 0 ? totalClicks / totalImpressions : 0;
+    const ctr = this.baseAnalytics.calculatePercentage(totalClicks, totalImpressions) / 100;
     const averageCpc = totalClicks > 0 ? totalRevenue / totalClicks : 0;
     const averageCpm = totalImpressions > 0
       ? (totalRevenue / totalImpressions) * 1000
@@ -237,16 +244,15 @@ export class AnalyticsService {
       totalClicks += campaignClicks;
       totalSpend += campaignSpend;
 
-      const ctr = campaignImpressions > 0
-        ? campaignClicks / campaignImpressions
-        : 0;
+      const ctr = this.baseAnalytics.calculatePercentage(campaignClicks, campaignImpressions) / 100;
       const cpc = campaignClicks > 0 ? campaignSpend / campaignClicks : 0;
       const cpm = campaignImpressions > 0
         ? (campaignSpend / campaignImpressions) * 1000
         : 0;
-      const conversionRate = campaignClicks > 0
-        ? campaign.totalConversions / campaignClicks
-        : 0;
+      const conversionRate = this.baseAnalytics.calculatePercentage(
+        campaign.totalConversions,
+        campaignClicks
+      ) / 100;
 
       return {
         campaignId: campaign.id,
@@ -267,7 +273,7 @@ export class AnalyticsService {
         const impressions = ad.adRequests.filter((r) => r.served).length;
         const clicks = ad.adRequests.filter((r) => r.clicked).length;
         const spend = ad.spentAmount.toNumber();
-        const ctr = impressions > 0 ? clicks / impressions : 0;
+        const ctr = this.baseAnalytics.calculatePercentage(clicks, impressions) / 100;
 
         return {
           adId: ad.id,
@@ -322,10 +328,10 @@ export class AnalyticsService {
       advertiser.campaigns
     );
 
-    const ctr = totalImpressions > 0 ? totalClicks / totalImpressions : 0;
+    const ctr = this.baseAnalytics.calculatePercentage(totalClicks, totalImpressions) / 100;
     const cpc = totalClicks > 0 ? totalSpend / totalClicks : 0;
     const cpm = totalImpressions > 0 ? (totalSpend / totalImpressions) * 1000 : 0;
-    const conversionRate = totalClicks > 0 ? totalConversions / totalClicks : 0;
+    const conversionRate = this.baseAnalytics.calculatePercentage(totalConversions, totalClicks) / 100;
     const roas = totalSpend > 0 ? (totalSpend * 1.5) / totalSpend : 0; // Simplified ROAS calculation
 
     return {
@@ -382,7 +388,10 @@ export class AnalyticsService {
 
         impressions += dayRequests.filter((r: any) => r.served).length;
         clicks += dayRequests.filter((r: any) => r.clicked).length;
-        // Revenue would need to be calculated from winning bids
+        /**
+         * Revenue calculation: Would need to aggregate winning bids from adRequests
+         * For now, revenue is tracked at the adUnit level separately
+         */
       });
 
       timeSeries.push({
@@ -432,7 +441,10 @@ export class AnalyticsService {
 
           impressions += dayRequests.filter((r: any) => r.served).length;
           clicks += dayRequests.filter((r: any) => r.clicked).length;
-          // Spend would need to be calculated from winning bids
+          /**
+           * Spend calculation: Would need to aggregate winning bids from adRequests
+           * For now, spend is tracked at the campaign/ad level separately
+           */
         });
       });
 

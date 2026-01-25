@@ -154,8 +154,8 @@ export class AdServer {
       const campaign = ad.campaign;
 
       // Calculate CTR (click-through rate)
-      const ctr = ad.impressions > 0
-        ? ad.clicks / ad.impressions
+      const ctr = ad.currentImpressions > 0
+        ? ad.currentClicks / ad.currentImpressions
         : 0.01; // Default CTR for new ads
 
       // Calculate relevance score (from targeting)

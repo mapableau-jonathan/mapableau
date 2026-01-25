@@ -59,7 +59,7 @@ export class WebAuthnService {
     origin?: string;
   }) {
     this.rpId = config?.rpId || process.env.WEBAUTHN_RP_ID || process.env.NEXT_PUBLIC_DOMAIN || "localhost";
-    this.rpName = config?.rpName || process.env.WEBAUTHN_RP_NAME || "AbilityPay Protocol";
+    this.rpName = config?.rpName || process.env.WEBAUTHN_RP_NAME || "AbilityPay";
     this.origin = config?.origin || process.env.WEBAUTHN_ORIGIN || process.env.NEXT_PUBLIC_URL || "http://localhost:3000";
   }
 

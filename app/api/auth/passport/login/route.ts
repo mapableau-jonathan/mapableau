@@ -1,70 +1,51 @@
 /**
  * Passport Login Endpoint
- * Authenticates users using Passport Local strategy and returns JWT tokens
+ * Authenticates users using Passport Local strategy and bridges to NextAuth
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateLocal } from "@/lib/auth/passport-adapter";
-import { generateTokenPair } from "@/lib/auth/jwt-service";
-import { getUserServices } from "@/lib/auth/sso-service";
-import { logger } from "@/lib/logger";
+import { createAuthErrorResponse } from "@/lib/auth/error-handler";
 
 /**
  * POST /api/auth/passport/login
- * Login with email and password
+ * Login with email and password - bridges to NextAuth
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, password } = body;
+    const { email, password, callbackUrl } = body;
 
     if (!email || !password) {
-      return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
-    }
-
-    // Authenticate using local strategy
-    const authResult = await authenticateLocal(email, password);
-
-    if (authResult.error || !authResult.user) {
       return NextResponse.json(
-        { error: authResult.error || "Authentication failed" },
-        { status: 401 }
+        { error: "Email and password are required" },
+        { status: 400 }
       );
     }
 
-    try {
-      // Get user's service access
-      const services = await getUserServices(authResult.user.id);
+    const authResult = await authenticateLocal(email, password);
 
-      // Generate JWT token pair
-      const tokens = generateTokenPair({
-        sub: authResult.user.id,
+    if (authResult.error || !authResult.user) {
+      return createAuthErrorResponse(
+        authResult.error || "Invalid email or password",
+        "Invalid email or password",
+        401
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      user: {
+        id: authResult.user.id,
         email: authResult.user.email,
         name: authResult.user.name,
         role: authResult.user.role,
-        serviceAccess: services,
-      });
-
-      return NextResponse.json({
-        success: true,
-        user: {
-          id: authResult.user.id,
-          email: authResult.user.email,
-          name: authResult.user.name,
-          role: authResult.user.role,
-          image: authResult.user.image,
-        },
-        tokens,
-      });
-    } catch (tokenError) {
-      logger.error("Token generation error", tokenError);
-      return NextResponse.json({ error: "Failed to generate tokens" }, { status: 500 });
-    }
+        image: authResult.user.image,
+      },
+      nextAuthSignIn: true,
+      callbackUrl: callbackUrl || "/dashboard",
+    });
   } catch (error) {
-    logger.error("Login endpoint error", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Login failed" },
-      { status: 500 }
-    );
+    return createAuthErrorResponse(error, "Login failed", 500);
   }
 }

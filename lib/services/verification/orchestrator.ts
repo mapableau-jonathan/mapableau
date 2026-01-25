@@ -5,6 +5,9 @@ import { VEVOService } from "./vevo";
 import { WWCCService } from "./wwcc";
 import { NDISService } from "./ndis";
 import { FirstAidService } from "./firstaid";
+import { ABNService } from "./abn-service";
+import { TFNService } from "./tfn-service";
+import { NDISWorkerCheckServiceWrapper } from "./ndis-worker-check-service-wrapper";
 import type { VerificationRequest } from "./base";
 import { verificationConfig } from "../../config/verification";
 
@@ -14,6 +17,9 @@ export class VerificationOrchestrator {
   private wwccService: WWCCService;
   private ndisService: NDISService;
   private firstAidService: FirstAidService;
+  private abnService: ABNService;
+  private tfnService: TFNService;
+  private ndisWorkerCheckService: NDISWorkerCheckServiceWrapper;
 
   constructor() {
     this.identityService = new IdentityVerificationService();
@@ -21,6 +27,9 @@ export class VerificationOrchestrator {
     this.wwccService = new WWCCService();
     this.ndisService = new NDISService();
     this.firstAidService = new FirstAidService();
+    this.abnService = new ABNService();
+    this.tfnService = new TFNService();
+    this.ndisWorkerCheckService = new NDISWorkerCheckServiceWrapper();
   }
 
   /**
@@ -309,6 +318,12 @@ export class VerificationOrchestrator {
         return this.ndisService;
       case "FIRST_AID":
         return this.firstAidService;
+      case "ABN":
+        return this.abnService;
+      case "TFN":
+        return this.tfnService;
+      case "NDIS_WORKER_CHECK":
+        return this.ndisWorkerCheckService;
       default:
         throw new Error(`Unknown verification type: ${verificationType}`);
     }
@@ -329,6 +344,12 @@ export class VerificationOrchestrator {
         return "ndis";
       case "FIRST_AID":
         return "usi";
+      case "ABN":
+        return "ABR";
+      case "TFN":
+        return "ATO";
+      case "NDIS_WORKER_CHECK":
+        return "ndis";
       default:
         return "unknown";
     }

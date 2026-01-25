@@ -9,13 +9,8 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    // requireAuth() throws an error if user is not authenticated, it never returns null
     const user = await requireAuth();
-    if (!user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
 
     const service = new JobService();
     const job = await service.getJobListing(params.id);
@@ -29,6 +24,14 @@ export async function GET(
 
     return NextResponse.json(job);
   } catch (error) {
+    // Handle authentication errors properly - return 401 instead of 500
+    if (error instanceof Error && error.message.includes("Unauthorized")) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
     console.error("Error fetching job listing:", error);
     return NextResponse.json(
       { error: "Failed to fetch job listing" },

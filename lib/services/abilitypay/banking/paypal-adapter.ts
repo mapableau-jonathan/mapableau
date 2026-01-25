@@ -194,7 +194,7 @@ export class PayPalAdapter {
           },
         ],
         application_context: {
-          brand_name: "AbilityPay Protocol",
+          brand_name: "AbilityPay",
           landing_page: "NO_PREFERENCE",
           user_action: "PAY_NOW",
           return_url: request.returnUrl,
@@ -450,5 +450,182 @@ export class PayPalAdapter {
    */
   isOrderCompleted(order: PayPalOrder): boolean {
     return order.status === "COMPLETED";
+  }
+
+  /**
+   * Create billing agreement for recurring payments
+   */
+  async createBillingAgreement(
+    planId: string,
+    description: string,
+    startDate?: string
+  ): Promise<{
+    id: string;
+    approvalUrl: string;
+    links: Array<{ href: string; rel: string; method: string }>;
+  }> {
+    try {
+      const agreementData = {
+        name: description,
+        description,
+        start_date: startDate || new Date(Date.now() + 3600000).toISOString(), // 1 hour from now
+        plan: {
+          id: planId,
+        },
+        payer: {
+          payment_method: "paypal",
+        },
+      };
+
+      const agreement = await this.apiRequest("POST", "/v1/billing-agreements/agreements", agreementData);
+
+      const approvalLink = agreement.links?.find((link: any) => link.rel === "approval_url");
+
+      return {
+        id: agreement.id,
+        approvalUrl: approvalLink?.href || "",
+        links: agreement.links || [],
+      };
+    } catch (error: any) {
+      logger.error("Failed to create PayPal billing agreement", error);
+      throw new Error(`PayPal billing agreement creation failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Execute billing agreement
+   */
+  async executeBillingAgreement(
+    agreementId: string,
+    payerId: string
+  ): Promise<any> {
+    try {
+      const agreement = await this.apiRequest(
+        "POST",
+        `/v1/billing-agreements/agreements/${agreementId}/agreement-execute`,
+        { payer_id: payerId }
+      );
+
+      return agreement;
+    } catch (error: any) {
+      logger.error("Failed to execute PayPal billing agreement", error);
+      throw new Error(`PayPal billing agreement execution failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Create vault token (save payment method)
+   */
+  async createVaultToken(
+    customerId: string,
+    paymentMethodToken: string
+  ): Promise<{
+    id: string;
+    state: string;
+  }> {
+    try {
+      const vaultData = {
+        customer_id: customerId,
+        payment_method: {
+          paypal: {
+            vault_id: paymentMethodToken,
+          },
+        },
+      };
+
+      const vault = await this.apiRequest("POST", "/v1/vault/payment-tokens", vaultData);
+
+      return {
+        id: vault.id,
+        state: vault.state,
+      };
+    } catch (error: any) {
+      logger.error("Failed to create PayPal vault token", error);
+      throw new Error(`PayPal vault token creation failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Update order before capture
+   */
+  async updateOrder(
+    orderId: string,
+    updates: {
+      op: "replace" | "add" | "remove";
+      path: string;
+      value: any;
+    }[]
+  ): Promise<PayPalOrder> {
+    try {
+      const order = await this.apiRequest("PATCH", `/v2/checkout/orders/${orderId}`, updates);
+
+      return {
+        id: order.id,
+        status: order.status,
+        intent: order.intent,
+        amount: {
+          currency_code: order.purchase_units[0].amount.currency_code,
+          value: order.purchase_units[0].amount.value,
+        },
+        create_time: order.create_time,
+        update_time: order.update_time,
+        links: order.links,
+        payer: order.payer,
+      };
+    } catch (error: any) {
+      logger.error("Failed to update PayPal order", error);
+      throw new Error(`PayPal order update failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get billing agreement details
+   */
+  async getBillingAgreement(agreementId: string): Promise<any> {
+    try {
+      return await this.apiRequest("GET", `/v1/billing-agreements/agreements/${agreementId}`);
+    } catch (error: any) {
+      logger.error("Failed to get PayPal billing agreement", error);
+      throw new Error(`PayPal billing agreement retrieval failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Cancel billing agreement
+   */
+  async cancelBillingAgreement(agreementId: string, note?: string): Promise<void> {
+    try {
+      await this.apiRequest("POST", `/v1/billing-agreements/agreements/${agreementId}/cancel`, {
+        note: note || "Cancelled by user",
+      });
+    } catch (error: any) {
+      logger.error("Failed to cancel PayPal billing agreement", error);
+      throw new Error(`PayPal billing agreement cancellation failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * List vault payment tokens
+   */
+  async listVaultTokens(customerId: string): Promise<any[]> {
+    try {
+      const response = await this.apiRequest("GET", `/v1/vault/payment-tokens?customer_id=${customerId}`);
+      return response.payment_tokens || [];
+    } catch (error: any) {
+      logger.error("Failed to list PayPal vault tokens", error);
+      throw new Error(`PayPal vault token list failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Delete vault payment token
+   */
+  async deleteVaultToken(tokenId: string): Promise<void> {
+    try {
+      await this.apiRequest("DELETE", `/v1/vault/payment-tokens/${tokenId}`);
+    } catch (error: any) {
+      logger.error("Failed to delete PayPal vault token", error);
+      throw new Error(`PayPal vault token deletion failed: ${error.message}`);
+    }
   }
 }

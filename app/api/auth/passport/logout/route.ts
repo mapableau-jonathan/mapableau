@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { logger } from "@/lib/logger";
+import { createAuthErrorResponse } from "@/lib/auth/error-handler";
 
 /**
  * POST /api/auth/passport/logout
@@ -12,23 +12,16 @@ import { logger } from "@/lib/logger";
  */
 export async function POST(request: NextRequest) {
   try {
-    // Clear cookies
-    const response = NextResponse.json({ success: true, message: "Logged out successfully" });
+    const response = NextResponse.json({
+      success: true,
+      message: "Logged out successfully",
+    });
 
     response.cookies.delete("access_token");
     response.cookies.delete("refresh_token");
 
-    // In a production system, you might want to:
-    // 1. Add tokens to a blacklist/revocation list
-    // 2. Invalidate refresh tokens in database
-    // 3. Log the logout event
-
     return response;
   } catch (error) {
-    logger.error("Logout endpoint error", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Logout failed" },
-      { status: 500 }
-    );
+    return createAuthErrorResponse(error, "Logout failed", 500);
   }
 }

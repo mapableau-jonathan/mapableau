@@ -37,13 +37,8 @@ const createJobSchema = z.object({
 
 export async function GET(req: Request) {
   try {
+    // requireAuth() throws an error if user is not authenticated, it never returns null
     const user = await requireAuth();
-    if (!user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
 
     const { searchParams } = new URL(req.url);
     const category = searchParams.get("category") || undefined;
@@ -61,6 +56,14 @@ export async function GET(req: Request) {
 
     return NextResponse.json({ jobs });
   } catch (error) {
+    // Handle authentication errors properly - return 401 instead of 500
+    if (error instanceof Error && error.message.includes("Unauthorized")) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
     console.error("Error fetching job listings:", error);
     return NextResponse.json(
       { error: "Failed to fetch job listings" },
@@ -71,13 +74,8 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    // requireAuth() throws an error if user is not authenticated, it never returns null
     const user = await requireAuth();
-    if (!user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
 
     const body = await req.json();
     const data = createJobSchema.parse(body);
@@ -87,7 +85,13 @@ export async function POST(req: Request) {
 
     return NextResponse.json(job, { status: 201 });
   } catch (error) {
-    console.error("Error creating job listing:", error);
+    // Handle authentication errors properly - return 401 instead of 500
+    if (error instanceof Error && error.message.includes("Unauthorized")) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -96,6 +100,7 @@ export async function POST(req: Request) {
       );
     }
 
+    console.error("Error creating job listing:", error);
     return NextResponse.json(
       { error: "Failed to create job listing" },
       { status: 500 }

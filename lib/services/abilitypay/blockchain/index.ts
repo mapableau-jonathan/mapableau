@@ -8,6 +8,7 @@ import { MockBlockchainAdapter } from "./mock-adapter";
 import { EthereumBlockchainAdapter } from "./ethereum-adapter";
 import { HyperledgerBlockchainAdapter } from "./hyperledger-adapter";
 import { PolygonBlockchainAdapter } from "./polygon-adapter";
+import { PaymentNetworkAdapter } from "./payment-network-adapter";
 
 export function createBlockchainAdapter(
   config: BlockchainAdapterConfig
@@ -48,6 +49,11 @@ export function createBlockchainAdapter(
         contractAddress: config.contractAddress,
       });
 
+    case "payment-network":
+      return new PaymentNetworkAdapter({
+        networkUrl: config.networkUrl,
+      });
+
     default:
       throw new Error(`Unsupported blockchain provider: ${config.provider}`);
   }
@@ -59,3 +65,4 @@ export { MockBlockchainAdapter } from "./mock-adapter";
 export { EthereumBlockchainAdapter } from "./ethereum-adapter";
 export { HyperledgerBlockchainAdapter } from "./hyperledger-adapter";
 export { PolygonBlockchainAdapter } from "./polygon-adapter";
+export { PaymentNetworkAdapter } from "./payment-network-adapter";

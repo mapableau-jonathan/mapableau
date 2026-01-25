@@ -491,4 +491,148 @@ export class StripeAdapter {
       throw new Error(`Stripe payment intent list failed: ${error.message}`);
     }
   }
+
+  /**
+   * Create Setup Intent for saving payment methods
+   */
+  async createSetupIntent(
+    customerId?: string,
+    paymentMethodTypes: string[] = ["card", "link"]
+  ): Promise<{
+    id: string;
+    client_secret: string;
+    status: string;
+  }> {
+    try {
+      const setupIntent = await this.stripe.setupIntents.create({
+        customer: customerId,
+        payment_method_types: paymentMethodTypes,
+      });
+
+      return {
+        id: setupIntent.id,
+        client_secret: setupIntent.client_secret!,
+        status: setupIntent.status,
+      };
+    } catch (error: any) {
+      throw new Error(`Stripe setup intent creation failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Attach payment method to customer
+   */
+  async attachPaymentMethod(
+    paymentMethodId: string,
+    customerId: string
+  ): Promise<any> {
+    try {
+      return await this.stripe.paymentMethods.attach(paymentMethodId, {
+        customer: customerId,
+      });
+    } catch (error: any) {
+      throw new Error(`Stripe payment method attachment failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Detach payment method from customer
+   */
+  async detachPaymentMethod(paymentMethodId: string): Promise<any> {
+    try {
+      return await this.stripe.paymentMethods.detach(paymentMethodId);
+    } catch (error: any) {
+      throw new Error(`Stripe payment method detachment failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * List payment methods for a customer
+   */
+  async listPaymentMethods(
+    customerId: string,
+    type?: string
+  ): Promise<any[]> {
+    try {
+      const params: Stripe.PaymentMethodListParams = {
+        customer: customerId,
+        type: type as Stripe.PaymentMethodListParams.Type,
+      };
+
+      const paymentMethods = await this.stripe.paymentMethods.list(params);
+      return paymentMethods.data;
+    } catch (error: any) {
+      throw new Error(`Stripe payment method list failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Create Customer Portal session
+   */
+  async createCustomerPortalSession(
+    customerId: string,
+    returnUrl: string
+  ): Promise<{
+    url: string;
+  }> {
+    try {
+      const session = await this.stripe.billingPortal.sessions.create({
+        customer: customerId,
+        return_url: returnUrl,
+      });
+
+      return {
+        url: session.url,
+      };
+    } catch (error: any) {
+      throw new Error(`Stripe customer portal session creation failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Update payment method
+   */
+  async updatePaymentMethod(
+    paymentMethodId: string,
+    updates: {
+      billing_details?: {
+        name?: string;
+        email?: string;
+        phone?: string;
+        address?: {
+          line1?: string;
+          line2?: string;
+          city?: string;
+          state?: string;
+          postal_code?: string;
+          country?: string;
+        };
+      };
+      metadata?: Record<string, string>;
+    }
+  ): Promise<any> {
+    try {
+      return await this.stripe.paymentMethods.update(paymentMethodId, updates);
+    } catch (error: any) {
+      throw new Error(`Stripe payment method update failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Set default payment method for customer
+   */
+  async setDefaultPaymentMethod(
+    customerId: string,
+    paymentMethodId: string
+  ): Promise<any> {
+    try {
+      return await this.stripe.customers.update(customerId, {
+        invoice_settings: {
+          default_payment_method: paymentMethodId,
+        },
+      });
+    } catch (error: any) {
+      throw new Error(`Stripe default payment method update failed: ${error.message}`);
+    }
+  }
 }

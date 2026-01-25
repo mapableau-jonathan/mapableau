@@ -137,11 +137,11 @@ function PaymentForm() {
 ```env
 # WebAuthn Configuration
 WEBAUTHN_RP_ID=yourdomain.com
-WEBAUTHN_RP_NAME=AbilityPay Protocol
+WEBAUTHN_RP_NAME=AbilityPay
 WEBAUTHN_ORIGIN=https://yourdomain.com
 
 # TOTP Configuration
-TOTP_ISSUER=AbilityPay Protocol
+TOTP_ISSUER=AbilityPay
 ```
 
 ### Payment Security Service

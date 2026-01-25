@@ -135,6 +135,62 @@ const envSchema = z.object({
   SALESFORCE_SYNC_COMPLAINTS: z.string().optional(),
   SALESFORCE_SYNC_RISKS: z.string().optional(),
   SALESFORCE_SYNC_PAYMENTS: z.string().optional(),
+
+  // Payment Providers
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_PUBLISHABLE_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  STRIPE_ENABLE_LINK: z.string().optional(),
+  PAYPAL_CLIENT_ID: z.string().optional(),
+  PAYPAL_CLIENT_SECRET: z.string().optional(),
+  PAYPAL_WEBHOOK_ID: z.string().optional(),
+  PAYPAL_ENVIRONMENT: z.enum(["sandbox", "production"]).optional(),
+
+  // Calendar Integration
+  GOOGLE_CALENDAR_CLIENT_ID: z.string().optional(),
+  GOOGLE_CALENDAR_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_CALENDAR_API_KEY: z.string().optional(),
+  GOOGLE_CALENDAR_REDIRECT_URI: z.string().url().optional(),
+  GOOGLE_MAPS_API_KEY: z.string().optional(),
+  OUTLOOK_CALENDAR_CLIENT_ID: z.string().optional(),
+  OUTLOOK_CALENDAR_CLIENT_SECRET: z.string().optional(),
+  OUTLOOK_CALENDAR_TENANT_ID: z.string().optional(),
+  OUTLOOK_CALENDAR_REDIRECT_URI: z.string().url().optional(),
+
+  // AI Assistant Integration (Motion, Reclaim, etc.)
+  MOTION_API_KEY: z.string().optional(),
+  MOTION_API_URL: z.string().url().optional(),
+  MOTION_ENABLED: z.string().optional(),
+
+  // Usage Tracking & Billing
+  USAGE_TRACKING_ENABLED: z.string().optional(),
+  API_CALL_COST: z.string().optional(),
+  HOURLY_RATE_SERVICE_CARE: z.string().optional(),
+  HOURLY_RATE_SERVICE_TRANSPORT: z.string().optional(),
+  STORAGE_COST_PER_GB: z.string().optional(),
+  BILLING_PERIOD_DAYS: z.string().optional(),
+  AUTO_GENERATE_INVOICES: z.string().optional(),
+  AUTO_CHARGE_INVOICES: z.string().optional(),
+  INVOICE_DUE_DAYS: z.string().optional(),
+  TAX_RATE: z.string().optional(),
+
+  // Twilio Email (SendGrid)
+  TWILIO_SENDGRID_API_KEY: z.string().optional(),
+  TWILIO_SENDGRID_FROM_EMAIL: z.string().optional(),
+  TWILIO_SENDGRID_FROM_NAME: z.string().optional(),
+  SENDGRID_API_KEY: z.string().optional(), // Alias for TWILIO_SENDGRID_API_KEY
+  FROM_EMAIL: z.string().optional(), // Alias for TWILIO_SENDGRID_FROM_EMAIL
+  FROM_NAME: z.string().optional(), // Alias for TWILIO_SENDGRID_FROM_NAME
+
+  // NDIS myplace Integration (optional)
+  NDIS_MYPLACE_API_URL: z.string().url().optional(), // Default: https://myplace.ndis.gov.au
+  NDIS_MYPLACE_CLIENT_ID: z.string().optional(),
+  NDIS_MYPLACE_CLIENT_SECRET: z.string().optional(),
+  NDIS_MYPLACE_AUTH_URL: z.string().url().optional(),
+  NDIS_MYPLACE_TOKEN_URL: z.string().url().optional(),
+  NDIS_MYPLACE_CALLBACK_URL: z.string().url().optional(),
+  NDIS_MYPLACE_SCOPE: z.string().optional(), // Default: openid profile ndis.read ndis.write
+  NDIS_MYPLACE_ENABLED: z.string().optional(),
 });
 
 type Env = z.infer<typeof envSchema>;
@@ -176,6 +232,12 @@ export function getEnv(): Env {
  * Call this at application startup
  */
 export function initEnv(): void {
+  // Skip validation if SKIP_ENV_VALIDATION is set (useful for development)
+  if (process.env.SKIP_ENV_VALIDATION === "true") {
+    console.log("⚠️  Environment validation skipped (SKIP_ENV_VALIDATION=true)");
+    return;
+  }
+
   try {
     validateEnv();
     console.log("✅ Environment variables validated successfully");
@@ -183,6 +245,9 @@ export function initEnv(): void {
     console.error("❌ Environment variable validation failed:", error);
     if (process.env.NODE_ENV === "production") {
       process.exit(1); // Fail fast in production
+    } else {
+      // In development, warn but don't exit
+      console.warn("⚠️  Continuing with missing environment variables (development mode)");
     }
   }
 }

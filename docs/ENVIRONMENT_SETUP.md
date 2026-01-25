@@ -1,6 +1,6 @@
 # Environment Variables Setup Guide
 
-This guide explains how to configure environment variables for the AbilityPay Protocol, including Stripe API keys.
+This guide explains how to configure environment variables for the AbilityPay, including Stripe API keys.
 
 ## Quick Start: Stripe API Key
 

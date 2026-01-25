@@ -13,13 +13,8 @@ const registerProviderSchema = z.object({
 
 export async function POST(req: Request) {
   try {
+    // requireAuth() throws an error if user is not authenticated, it never returns null
     const user = await requireAuth();
-    if (!user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
 
     const body = await registerProviderSchema.parse(await req.json());
     
@@ -59,7 +54,13 @@ export async function POST(req: Request) {
 
     return NextResponse.json(syncResult.registration, { status: 201 });
   } catch (error) {
-    console.error("Error registering provider:", error);
+    // Handle authentication errors properly - return 401 instead of 500
+    if (error instanceof Error && error.message.includes("Unauthorized")) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -68,6 +69,7 @@ export async function POST(req: Request) {
       );
     }
 
+    console.error("Error registering provider:", error);
     return NextResponse.json(
       { error: "Failed to register provider" },
       { status: 500 }

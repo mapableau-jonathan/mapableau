@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { VerificationOrchestrator } from "@/lib/services/verification/orchestrator";
 import { requireAuth, requireAdmin, hasResourceAccess } from "@/lib/security/authorization-utils";
 import { logger } from "@/lib/logger";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 export async function GET(
   req: Request,

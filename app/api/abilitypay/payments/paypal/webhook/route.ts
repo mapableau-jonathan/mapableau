@@ -76,6 +76,19 @@ export async function POST(request: NextRequest) {
         await handleOrderCancelled(event);
         break;
 
+      case "BILLING.SUBSCRIPTION.CREATED":
+      case "BILLING.SUBSCRIPTION.UPDATED":
+        await handleBillingSubscriptionUpdated(event);
+        break;
+
+      case "BILLING.SUBSCRIPTION.CANCELLED":
+        await handleBillingSubscriptionCancelled(event);
+        break;
+
+      case "VAULT.PAYMENT-TOKEN.CREATED":
+        await handleVaultTokenCreated(event);
+        break;
+
       default:
         logger.debug(`Unhandled PayPal webhook event type: ${event.event_type}`);
     }
@@ -292,4 +305,83 @@ async function handleOrderCancelled(event: any) {
   }
 
   logger.info(`PayPal order cancelled: ${order.id}`);
+}
+
+/**
+ * Handle billing subscription updated
+ */
+async function handleBillingSubscriptionUpdated(event: any) {
+  const subscription = event.resource;
+  const subscriptionId = subscription.id;
+
+  try {
+    await prisma.subscription.updateMany({
+      where: {
+        metadata: {
+          path: ["providerSubscriptionId"],
+          equals: subscriptionId,
+        } as any,
+      },
+      data: {
+        status: subscription.status === "ACTIVE" ? "ACTIVE" : "TRIAL",
+        endDate: subscription.billing_info?.next_billing_time
+          ? new Date(subscription.billing_info.next_billing_time)
+          : undefined,
+      },
+    });
+
+    logger.info(`PayPal subscription updated: ${subscriptionId}`);
+  } catch (error) {
+    logger.error("Error updating PayPal subscription", error);
+  }
+}
+
+/**
+ * Handle billing subscription cancelled
+ */
+async function handleBillingSubscriptionCancelled(event: any) {
+  const subscription = event.resource;
+  const subscriptionId = subscription.id;
+
+  try {
+    await prisma.subscription.updateMany({
+      where: {
+        metadata: {
+          path: ["providerSubscriptionId"],
+          equals: subscriptionId,
+        } as any,
+      },
+      data: {
+        status: "CANCELLED",
+        cancelledAt: new Date(),
+      },
+    });
+
+    logger.info(`PayPal subscription cancelled: ${subscriptionId}`);
+  } catch (error) {
+    logger.error("Error cancelling PayPal subscription", error);
+  }
+}
+
+/**
+ * Handle vault token created - save payment method
+ */
+async function handleVaultTokenCreated(event: any) {
+  const token = event.resource;
+  const userId = token.customer_id;
+
+  if (userId) {
+    try {
+      const { unifiedPaymentService } = await import("@/lib/services/payments/unified-payment-service");
+      await unifiedPaymentService.savePaymentMethod("paypal", userId, {
+        providerPaymentMethodId: token.id,
+        type: "paypal",
+        metadata: { vaultToken: token.id },
+      });
+
+      logger.info(`PayPal vault token saved: ${token.id}`);
+    } catch (error) {
+      logger.error("Error saving PayPal vault token", error);
+    }
+  }
 }

@@ -21,11 +21,11 @@ Add to your `.env` file:
 
 ```env
 # TOTP Configuration
-TOTP_ISSUER="AbilityPay Protocol"
+TOTP_ISSUER="AbilityPay"
 
 # WebAuthn Configuration
 WEBAUTHN_RP_ID=yourdomain.com
-WEBAUTHN_RP_NAME="AbilityPay Protocol"
+WEBAUTHN_RP_NAME="AbilityPay"
 WEBAUTHN_ORIGIN=https://yourdomain.com
 
 # For local development

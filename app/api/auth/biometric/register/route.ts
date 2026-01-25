@@ -13,7 +13,7 @@ import { logger } from "@/lib/logger";
 
 const webauthnService = new WebAuthnService({
   rpId: process.env.WEBAUTHN_RP_ID || process.env.NEXT_PUBLIC_DOMAIN || "localhost",
-  rpName: process.env.WEBAUTHN_RP_NAME || "AbilityPay Protocol",
+  rpName: process.env.WEBAUTHN_RP_NAME || "AbilityPay",
   origin: process.env.WEBAUTHN_ORIGIN || process.env.NEXT_PUBLIC_URL || "http://localhost:3000",
 });
 

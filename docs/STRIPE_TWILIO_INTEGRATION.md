@@ -1,6 +1,6 @@
 # Stripe Link & Twilio SMS Verification Integration
 
-The AbilityPay Protocol now supports Stripe Link payments with Twilio SMS verification for enhanced security.
+The AbilityPay now supports Stripe Link payments with Twilio SMS verification for enhanced security.
 
 ## Overview
 

@@ -117,14 +117,14 @@ This document lists all environment variables that are referenced in the codebas
 - `WEBAUTHN_RP_ID` - Relying Party ID for WebAuthn
   - Falls back to `NEXT_PUBLIC_DOMAIN` or `localhost`
 - `WEBAUTHN_RP_NAME` - Relying Party name
-  - Default: `AbilityPay Protocol`
+  - Default: `AbilityPay`
 - `WEBAUTHN_ORIGIN` - WebAuthn origin URL
   - Falls back to `NEXT_PUBLIC_URL` or `http://localhost:3000`
 
 ## TOTP (Two-Factor Authentication)
 
 - `TOTP_ISSUER` - TOTP issuer name
-  - Default: `AbilityPay Protocol`
+  - Default: `AbilityPay`
 
 ## Application Configuration
 

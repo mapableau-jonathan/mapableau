@@ -4,6 +4,7 @@
  */
 
 import { prisma } from "../../prisma";
+import { BaseAnalyticsService } from "../analytics/base-analytics-service";
 
 export interface QualityMetrics {
   serviceDeliveryKPIs: {
@@ -50,6 +51,12 @@ export interface QualityMetrics {
 }
 
 export class QualityAnalyticsService {
+  private baseAnalytics: BaseAnalyticsService;
+
+  constructor() {
+    this.baseAnalytics = new BaseAnalyticsService();
+  }
+
   /**
    * Get comprehensive quality metrics
    */
@@ -57,10 +64,7 @@ export class QualityAnalyticsService {
     startDate?: Date,
     endDate?: Date
   ): Promise<QualityMetrics> {
-    const dateFilter = {
-      ...(startDate && { gte: startDate }),
-      ...(endDate && { lte: endDate }),
-    };
+    const dateFilter = this.baseAnalytics.buildDateFilter(startDate, endDate) || {};
 
     // Service Delivery KPIs
     const [totalPayments, completedPayments] = await Promise.all([
@@ -91,10 +95,7 @@ export class QualityAnalyticsService {
     const ratings = complaints
       .map((c) => c.satisfactionRating)
       .filter((r): r is number => r !== null);
-    const avgRating =
-      ratings.length > 0
-        ? ratings.reduce((sum, r) => sum + r, 0) / ratings.length
-        : 0;
+    const avgRating = this.baseAnalytics.calculateAverage(ratings);
 
     // Provider Performance
     const providers = await prisma.providerRegistration.findMany({
@@ -159,8 +160,10 @@ export class QualityAnalyticsService {
       serviceDeliveryKPIs: {
         totalServices: totalPayments,
         completedServices: completedPayments,
-        completionRate:
-          totalPayments > 0 ? (completedPayments / totalPayments) * 100 : 0,
+        completionRate: this.baseAnalytics.calculatePercentage(
+          completedPayments,
+          totalPayments
+        ),
         avgServiceTime: 0, // TODO: Calculate from service records
       },
       participantSatisfaction: {
@@ -183,10 +186,10 @@ export class QualityAnalyticsService {
       complaintTrends: {
         totalComplaints,
         resolvedComplaints,
-        resolutionRate:
-          totalComplaints > 0
-            ? (resolvedComplaints / totalComplaints) * 100
-            : 0,
+        resolutionRate: this.baseAnalytics.calculatePercentage(
+          resolvedComplaints,
+          totalComplaints
+        ),
         avgResolutionTime: 0, // TODO: Calculate from resolved complaints
       },
       carePlanMetrics: {
@@ -198,8 +201,10 @@ export class QualityAnalyticsService {
       workerCompliance: {
         totalWorkers,
         verifiedWorkers,
-        complianceRate:
-          totalWorkers > 0 ? (verifiedWorkers / totalWorkers) * 100 : 0,
+        complianceRate: this.baseAnalytics.calculatePercentage(
+          verifiedWorkers,
+          totalWorkers
+        ),
         expiringVerifications: 0, // TODO: Calculate from verification expiry dates
       },
     };

@@ -123,6 +123,25 @@ export function normalizeMediaWikiProfile(profile: any): NormalizedProfile {
 }
 
 /**
+ * Normalize profile from SAML assertion
+ */
+export function normalizeSAMLProfile(profile: any): NormalizedProfile {
+  return {
+    provider: "saml",
+    providerAccountId: profile.nameID || profile.id || profile.email || "",
+    email: profile.email || "",
+    name: profile.name || profile.displayName || profile.cn || "",
+    image: profile.picture || profile.photo || profile.thumbnailPhoto,
+    emailVerified: profile.email ? true : false, // SAML assertions are typically from trusted IdPs
+    rawProfile: profile,
+    additionalData: {
+      nameID: profile.nameID,
+      attributes: profile.attributes || {},
+    },
+  };
+}
+
+/**
  * Normalize profile from generic OAuth2 provider
  */
 export function normalizeOAuth2Profile(profile: any, provider: string): NormalizedProfile {
@@ -156,6 +175,8 @@ export function normalizeProfile(provider: string, profile: any): NormalizedProf
       return normalizeReplitProfile(profile);
     case "mediawiki":
       return normalizeMediaWikiProfile(profile);
+    case "saml":
+      return normalizeSAMLProfile(profile);
     default:
       return normalizeOAuth2Profile(profile, provider);
   }

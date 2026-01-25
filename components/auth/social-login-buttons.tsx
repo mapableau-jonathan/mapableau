@@ -22,15 +22,23 @@ function SocialLoginButtonsContent({
   const finalServiceId = serviceIdFromUrl || serviceId;
 
   const handleSocialLogin = async (provider: "google" | "facebook" | "microsoft" | "wix") => {
-    // Use new identity provider endpoint
-    const baseUrl = window.location.origin;
-    const authUrl = new URL(`/api/auth/identity-provider/${provider}`, baseUrl);
-    authUrl.searchParams.set("serviceId", finalServiceId);
-    if (callbackUrl) {
-      authUrl.searchParams.set("callbackUrl", callbackUrl);
+    // Skip Wix - not implemented via Passport yet
+    if (provider === "wix") {
+      console.warn("Wix OAuth not yet implemented via Passport");
+      return;
     }
 
-    // Redirect to identity provider
+    // Use Passport OAuth endpoints
+    const baseUrl = window.location.origin;
+    const authUrl = new URL(`/api/auth/${provider}`, baseUrl);
+    
+    // Optional: pass callback URL if needed
+    if (callbackUrl && callbackUrl !== "/dashboard") {
+      // Note: Callback URLs are handled server-side via default redirect
+      // This could be extended to pass via query param if needed
+    }
+
+    // Redirect to OAuth provider
     window.location.href = authUrl.toString();
   };
 

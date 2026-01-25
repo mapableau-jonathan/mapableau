@@ -13,11 +13,6 @@ const stripeAdapter = new StripeAdapter({
   webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
 });
 
-const stripeAdapter = new StripeAdapter({
-  apiKey: process.env.STRIPE_SECRET_KEY,
-  webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
-});
-
 export async function POST(request: NextRequest) {
   try {
     // Get webhook signature from header
@@ -37,13 +32,10 @@ export async function POST(request: NextRequest) {
     const event = stripeAdapter.verifyWebhookSignature(body, signature);
 
     // Handle different event types
+    // Each case is explicitly separated to prevent event routing issues
     switch (event.type) {
       case "payment_intent.succeeded":
         await handlePaymentIntentSucceeded(event);
-        break;
-
-      case "payment_intent.payment_failed":
-        await handlePaymentIntentFailed(event);
         break;
 
       case "payment_intent.payment_failed":
@@ -60,6 +52,26 @@ export async function POST(request: NextRequest) {
 
       case "payment_intent.processing":
         await handlePaymentIntentProcessing(event);
+        break;
+
+      case "setup_intent.succeeded":
+        await handleSetupIntentSucceeded(event);
+        break;
+
+      case "customer.subscription.created":
+        await handleSubscriptionUpdated(event);
+        break;
+
+      case "customer.subscription.updated":
+        await handleSubscriptionUpdated(event);
+        break;
+
+      case "customer.subscription.deleted":
+        await handleSubscriptionDeleted(event);
+        break;
+
+      case "payment_method.attached":
+        await handlePaymentMethodAttached(event);
         break;
 
       default:
@@ -251,4 +263,114 @@ async function handlePaymentIntentProcessing(event: any) {
   }
 
   logger.info(`Stripe payment processing: ${paymentIntent.id}`);
+}
+
+/**
+ * Handle setup intent succeeded - save payment method
+ */
+async function handleSetupIntentSucceeded(event: any) {
+  const setupIntent = event.data.object;
+  const userId = setupIntent.metadata?.userId;
+
+  if (userId && setupIntent.payment_method) {
+    try {
+      const pm = await stripeAdapter.getPaymentMethod(setupIntent.payment_method);
+      const { unifiedPaymentService } = await import("@/lib/services/payments/unified-payment-service");
+
+      await unifiedPaymentService.savePaymentMethod("stripe", userId, {
+        providerPaymentMethodId: setupIntent.payment_method,
+        type: pm.type,
+        last4: pm.card?.last4,
+        brand: pm.card?.brand,
+        expiryMonth: pm.card?.exp_month,
+        expiryYear: pm.card?.exp_year,
+        metadata: { setupIntentId: setupIntent.id },
+      });
+
+      logger.info(`Payment method saved: ${setupIntent.payment_method}`);
+    } catch (error) {
+      logger.error("Error saving payment method from setup intent", error);
+    }
+  }
+}
+
+/**
+ * Handle subscription updated
+ */
+async function handleSubscriptionUpdated(event: any) {
+  const subscription = event.data.object;
+  const subscriptionId = subscription.metadata?.subscriptionId;
+
+  if (subscriptionId) {
+    try {
+      const { subscriptionService } = await import("@/lib/services/payments/subscription-service");
+      // Update subscription status
+      await prisma.subscription.update({
+        where: { id: subscriptionId },
+        data: {
+          status: subscription.status === "active" ? "ACTIVE" : "TRIAL",
+          endDate: new Date(subscription.current_period_end * 1000),
+          metadata: {
+            ...((await prisma.subscription.findUnique({ where: { id: subscriptionId } }))?.metadata as any || {}),
+            providerSubscriptionId: subscription.id,
+            status: subscription.status,
+          } as any,
+        },
+      });
+
+      logger.info(`Subscription updated: ${subscriptionId}`);
+    } catch (error) {
+      logger.error("Error updating subscription", error);
+    }
+  }
+}
+
+/**
+ * Handle subscription deleted
+ */
+async function handleSubscriptionDeleted(event: any) {
+  const subscription = event.data.object;
+  const subscriptionId = subscription.metadata?.subscriptionId;
+
+  if (subscriptionId) {
+    try {
+      await prisma.subscription.update({
+        where: { id: subscriptionId },
+        data: {
+          status: "CANCELLED",
+          cancelledAt: new Date(),
+        },
+      });
+
+      logger.info(`Subscription cancelled: ${subscriptionId}`);
+    } catch (error) {
+      logger.error("Error cancelling subscription", error);
+    }
+  }
+}
+
+/**
+ * Handle payment method attached
+ */
+async function handlePaymentMethodAttached(event: any) {
+  const paymentMethod = event.data.object;
+  const userId = paymentMethod.metadata?.userId;
+
+  if (userId) {
+    try {
+      const { unifiedPaymentService } = await import("@/lib/services/payments/unified-payment-service");
+      await unifiedPaymentService.savePaymentMethod("stripe", userId, {
+        providerPaymentMethodId: paymentMethod.id,
+        type: paymentMethod.type,
+        last4: paymentMethod.card?.last4,
+        brand: paymentMethod.card?.brand,
+        expiryMonth: paymentMethod.card?.exp_month,
+        expiryYear: paymentMethod.card?.exp_year,
+      });
+
+      logger.info(`Payment method attached: ${paymentMethod.id}`);
+    } catch (error) {
+      logger.error("Error saving attached payment method", error);
+    }
+  }
 }

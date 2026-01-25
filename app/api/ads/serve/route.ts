@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AdServer } from "@/lib/services/advertising/ad-server";
 import type { AdRequestContext } from "@/lib/services/advertising/types";
 import { z } from "zod";
+import { logger } from "@/lib/logger";
 
 const adRequestSchema = z.object({
   adUnitId: z.string(),

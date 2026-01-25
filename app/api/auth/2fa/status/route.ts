@@ -10,7 +10,7 @@ import { TOTPService } from "@/lib/services/verification/totp-service";
 import { prisma } from "@/lib/prisma";
 
 const totpService = new TOTPService({
-  issuer: process.env.TOTP_ISSUER || "AbilityPay Protocol",
+  issuer: process.env.TOTP_ISSUER || "AbilityPay",
 });
 
 export async function GET(request: NextRequest) {

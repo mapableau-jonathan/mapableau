@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { verifyToken, extractTokenFromHeader } from "@/lib/auth/jwt-service";
-import { logger } from "@/lib/logger";
+import { createAuthErrorResponse } from "@/lib/auth/error-handler";
 
 /**
  * GET /api/auth/passport/verify
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Token is required" }, { status: 400 });
     }
 
-    const payload = verifyToken(token);
+    const payload = await verifyToken(token);
 
     return NextResponse.json({
       success: true,
@@ -33,12 +33,6 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    logger.error("Verify token endpoint error", error);
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Token verification failed",
-      },
-      { status: 401 }
-    );
+    return createAuthErrorResponse(error, "Token verification failed", 401);
   }
 }

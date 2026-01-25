@@ -4,6 +4,7 @@
  */
 
 import { JobService } from "./job-service";
+import { BaseAnalyticsService } from "../analytics/base-analytics-service";
 
 export interface JobAnalytics {
   totalJobs: number;
@@ -19,9 +20,11 @@ export interface JobAnalytics {
 
 export class JobsAnalyticsService {
   private jobService: JobService;
+  private baseAnalytics: BaseAnalyticsService;
 
   constructor() {
     this.jobService = new JobService();
+    this.baseAnalytics = new BaseAnalyticsService();
   }
 
   /**
@@ -57,10 +60,14 @@ export class JobsAnalyticsService {
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
 
-    // TODO: Calculate application metrics when application data is available
-    // const allApplications = await this.jobService.getAllApplications();
-    // analytics.avgApplicationsPerJob = allApplications.length / analytics.totalJobs;
-    // analytics.applicationSuccessRate = ...;
+    /**
+     * TODO: Calculate application metrics when application data is available
+     * 
+     * Future implementation:
+     * - Fetch all applications via jobService.getAllApplications()
+     * - Calculate avgApplicationsPerJob = totalApplications / totalJobs
+     * - Calculate applicationSuccessRate from application outcomes
+     */
 
     return analytics;
   }

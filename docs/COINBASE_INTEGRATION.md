@@ -1,6 +1,6 @@
 # Coinbase Commerce Integration
 
-The AbilityPay Protocol now supports Coinbase Commerce as an alternative payment method alongside blockchain tokens and NPP (New Payments Platform).
+The AbilityPay now supports Coinbase Commerce as an alternative payment method alongside blockchain tokens and NPP (New Payments Platform).
 
 ## Overview
 

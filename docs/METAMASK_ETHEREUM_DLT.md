@@ -1,6 +1,6 @@
 # MetaMask & Ethereum DLT Integration
 
-The AbilityPay Protocol now supports MetaMask wallet integration and direct Ethereum Distributed Ledger Technology (DLT) interactions for payments.
+The AbilityPay now supports MetaMask wallet integration and direct Ethereum Distributed Ledger Technology (DLT) interactions for payments.
 
 ## Overview
 

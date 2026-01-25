@@ -7,6 +7,8 @@ import "leaflet/dist/leaflet.css";
 import { useMapProvider } from "@/hooks/use-map-provider";
 import { GoogleMap } from "./GoogleMap";
 import { MapProviderToggle } from "./MapProviderToggle";
+import { StreetView } from "./StreetView";
+import { Map3DControls } from "./Map3DControls";
 import type { MapProvider } from "@/lib/services/mapping/map-provider-service";
 
 // Dynamically import react-leaflet to avoid SSR issues
@@ -71,8 +73,15 @@ export default function Map({
   enableStreetView = false,
 }: MapProps) {
   const [isClient, setIsClient] = useState(false);
-  const { provider: currentProvider } = useMapProvider();
+  const { provider: currentProvider, capabilities } = useMapProvider();
   const provider = providerOverride || currentProvider;
+  const [showStreetView, setShowStreetView] = useState(false);
+  const [streetViewPosition, setStreetViewPosition] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
+  const [mapTilt, setMapTilt] = useState(0);
+  const [mapHeading, setMapHeading] = useState(0);
 
   useEffect(() => {
     setIsClient(true);
@@ -84,6 +93,26 @@ export default function Map({
       return { lat: center[0], lng: center[1] };
     }
     return center as { lat: number; lng: number };
+  };
+
+  // Handle map click - open StreetView if enabled
+  const handleMapClick = (location: { lat: number; lng: number }) => {
+    if (capabilities.supportsStreetView && enableStreetView) {
+      setStreetViewPosition(location);
+      setShowStreetView(true);
+    }
+  };
+
+  // Handle marker click - open StreetView if enabled
+  const handleMarkerClick = (marker: MapMarker) => {
+    const position = Array.isArray(marker.position)
+      ? { lat: marker.position[0], lng: marker.position[1] }
+      : { lat: (marker.position as any).lat, lng: (marker.position as any).lng };
+    
+    if (capabilities.supportsStreetView && enableStreetView) {
+      setStreetViewPosition(position);
+      setShowStreetView(true);
+    }
   };
 
   if (!isClient) {
@@ -102,6 +131,18 @@ export default function Map({
     return (
       <div className={`relative ${className}`} style={{ height }}>
         {showProviderToggle && <MapProviderToggle className="absolute top-2 left-2 z-10" />}
+        {capabilities.supports3DBuildings && enable3DBuildings && (
+          <Map3DControls
+            currentTilt={mapTilt}
+            currentHeading={mapHeading}
+            onTiltChange={setMapTilt}
+            onHeadingChange={setMapHeading}
+            onReset={() => {
+              setMapTilt(0);
+              setMapHeading(0);
+            }}
+          />
+        )}
         <GoogleMap
           center={getGoogleCenter()}
           zoom={zoom}
@@ -116,7 +157,24 @@ export default function Map({
           height={height}
           enable3DBuildings={enable3DBuildings}
           enableStreetView={enableStreetView}
+          tilt={mapTilt}
+          heading={mapHeading}
+          onMapClick={handleMapClick}
+          onMarkerClick={handleMarkerClick}
+          onTiltChange={setMapTilt}
+          onHeadingChange={setMapHeading}
         />
+        {showStreetView && streetViewPosition && (
+          <StreetView
+            position={streetViewPosition}
+            fullscreen={true}
+            onClose={() => {
+              setShowStreetView(false);
+              setStreetViewPosition(null);
+            }}
+            onPositionChange={setStreetViewPosition}
+          />
+        )}
       </div>
     );
   }

@@ -103,6 +103,9 @@ enum VerificationType {
   WWCC
   NDIS
   FIRST_AID
+  ABN
+  TFN
+  NDIS_WORKER_CHECK
 }
 
 enum VerificationStatus {
@@ -223,7 +226,7 @@ model VerificationAlert {
   @@index([sentAt])
 }
 
-// AbilityPay Protocol Models
+// AbilityPay Models
 
 enum NDISPlanStatus {
   DRAFT
@@ -389,6 +392,9 @@ model ProviderRegistration {
   userId            String                      @unique
   user              User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
   providerNumber    String                      @unique
+  abn               String?                     // Australian Business Number
+  abnVerified       Boolean                     @default(false)
+  abnVerifiedAt     DateTime?
   registrationStatus ProviderRegistrationStatus  @default(PENDING)
   serviceCategories String[]                   // Array of service category codes
   priceGuideVersion String?
@@ -399,6 +405,7 @@ model ProviderRegistration {
 
   @@index([userId])
   @@index([providerNumber])
+  @@index([abn])
   @@index([registrationStatus])
   @@index([expiresAt])
 }
@@ -1134,6 +1141,107 @@ model WebAuthnCredential {
   @@index([credentialId])
 }
 
+// Payment Node Network
+model PaymentNode {
+  id              String   @id @default(cuid())
+  nodeId           String   @unique // Public key identifier
+  name             String
+  publicKey        String   @unique
+  endpoint         String   // RPC endpoint URL
+  status           NodeStatus @default(PENDING)
+  role             NodeRole
+  stake            Decimal?  @db.Decimal(18, 8) // Optional stake amount
+  registeredAt     DateTime  @default(now())
+  approvedAt       DateTime?
+  lastSeenAt       DateTime?
+  metadata         Json?
+  
+  blocks           Block[]  @relation("BlockValidator")
+  
+  @@index([nodeId])
+  @@index([status])
+  @@index([role])
+}
+
+model Block {
+  id              String   @id @default(cuid())
+  number          BigInt   @unique
+  hash            String   @unique
+  previousHash    String
+  timestamp       DateTime
+  validatorId     String
+  validator       PaymentNode @relation("BlockValidator", fields: [validatorId], references: [id])
+  merkleRoot      String
+  transactionCount Int     @default(0)
+  size            Int?     // Block size in bytes
+  signature       String
+  createdAt       DateTime  @default(now())
+  
+  transactions    NetworkTransaction[]
+  
+  @@index([number])
+  @@index([hash])
+  @@index([previousHash])
+  @@index([timestamp])
+}
+
+model NetworkTransaction {
+  id              String   @id @default(cuid())
+  blockId         String?
+  block           Block?   @relation(fields: [blockId], references: [id])
+  hash            String   @unique
+  type            TransactionType
+  from            String
+  to              String
+  amount          Decimal  @db.Decimal(18, 8)
+  nonce           BigInt
+  data            Json?    // AbilityPay-specific transaction data
+  signature       String
+  status          TransactionStatus @default(PENDING)
+  gasUsed         BigInt?
+  blockNumber     BigInt?
+  blockHash       String?
+  createdAt       DateTime  @default(now())
+  processedAt     DateTime?
+  
+  @@index([hash])
+  @@index([from])
+  @@index([to])
+  @@index([type])
+  @@index([status])
+  @@index([blockNumber])
+}
+
+enum NodeStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  OFFLINE
+}
+
+enum NodeRole {
+  VALIDATOR
+  OBSERVER
+  ARCHIVE
+}
+
+enum TransactionType {
+  PAYMENT
+  TOKEN_MINT
+  TOKEN_TRANSFER
+  PLAN_UPDATE
+  NODE_REGISTRATION
+  QUALITY_RATING
+  SAFEGUARDING_UPDATE
+}
+
+enum TransactionStatus {
+  PENDING
+  INCLUDED
+  CONFIRMED
+  FAILED
+}
+
 // MapAble Core - Unified Account & Service Management
 enum ServiceType {
   CARE
@@ -1235,6 +1343,9 @@ model Invoice {
   paymentReference  String?
   lineItems         Json            // Array of invoice line items
   metadata          Json?           // Additional invoice data
+  // Usage-based billing
+  isUsageBased      Boolean         @default(false)
+  usageBillingPeriods UsageBillingPeriod[]
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
@@ -1243,6 +1354,7 @@ model Invoice {
   @@index([status])
   @@index([invoiceNumber])
   @@index([dueDate])
+  @@index([isUsageBased])
 }
 
 enum MessageType {
@@ -1432,4 +1544,156 @@ model NotionSyncMapping {
   @@index([entityType])
   @@index([systemId])
   @@index([conflictState])
+}
+
+// Usage Tracking & Billing Models
+enum UsageType {
+  API_CALL
+  SERVICE_HOUR
+  STORAGE_GB
+}
+
+enum BillingPeriodStatus {
+  OPEN
+  CLOSED
+  INVOICED
+  PAID
+}
+
+model UsageRecord {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  usageType       UsageType
+  resourceId      String?  // Transaction ID, care plan ID, etc.
+  quantity        Decimal  @db.Decimal(12, 4) // Hours, GB, API calls
+  duration        Int?     // Milliseconds for API calls
+  cost            Decimal  @db.Decimal(12, 2) // Calculated cost
+  metadata        Json?    // Additional tracking data (endpoint, method, etc.)
+  billingPeriodId String?
+  billingPeriod   UsageBillingPeriod? @relation(fields: [billingPeriodId], references: [id])
+  createdAt       DateTime @default(now())
+  
+  @@index([userId])
+  @@index([usageType])
+  @@index([billingPeriodId])
+  @@index([createdAt])
+  @@index([resourceId])
+}
+
+model UsageBillingPeriod {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startDate     DateTime
+  endDate       DateTime
+  status        BillingPeriodStatus @default(OPEN)
+  totalCost     Decimal  @db.Decimal(12, 2)
+  invoiceId     String?
+  invoice       Invoice? @relation(fields: [invoiceId], references: [id])
+  usageRecords  UsageRecord[]
+  createdAt     DateTime @default(now())
+  closedAt      DateTime?
+  
+  @@index([userId])
+  @@index([status])
+  @@index([startDate, endDate])
+  @@unique([userId, startDate, endDate])
+}
+
+model SavedPaymentMethod {
+  id                      String   @id @default(cuid())
+  userId                  String
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider                String   // "stripe" | "paypal"
+  providerPaymentMethodId String   // Stripe PM ID or PayPal token
+  type                    String   // "card", "paypal", etc.
+  isDefault               Boolean  @default(false)
+  last4                   String?  // Last 4 digits for cards
+  brand                   String?  // Visa, Mastercard, etc.
+  expiryMonth             Int?
+  expiryYear              Int?
+  metadata                Json?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([provider])
+  @@index([isDefault])
+}
+
+// Transportation Services Models
+enum TransportBookingStatus {
+  PENDING
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum TransportServiceType {
+  MEDICAL_APPOINTMENT
+  SOCIAL_ACTIVITY
+  SHOPPING
+  WORK
+  EDUCATION
+  AGED_CARE_SERVICE
+  OTHER
+}
+
+enum AccessibilityRequirement {
+  WHEELCHAIR_ACCESSIBLE
+  MOBILITY_AID_SUPPORT
+  HEARING_IMPAIRED
+  VISUALLY_IMPAIRED
+  COGNITIVE_SUPPORT
+  MEDICAL_EQUIPMENT
+  CARER_ACCOMPANYING
+  NO_STAIRS
+  LOW_FLOOR_ENTRY
+}
+
+model TransportBooking {
+  id                      String   @id @default(cuid())
+  bookingNumber           String   @unique
+  participantId           String
+  participant             User     @relation("ParticipantTransportBookings", fields: [participantId], references: [id], onDelete: Cascade)
+  driverId                String?
+  driver                  Worker?  @relation("DriverTransportBookings", fields: [driverId], references: [id])
+  serviceType             TransportServiceType
+  pickupLocation          Json     // { address, latitude, longitude }
+  dropoffLocation         Json     // { address, latitude, longitude }
+  scheduledPickupTime     DateTime
+  scheduledDropoffTime    DateTime?
+  actualPickupTime        DateTime?
+  actualDropoffTime       DateTime?
+  status                  TransportBookingStatus @default(PENDING)
+  accessibilityRequirements String[] // Array of AccessibilityRequirement values
+  passengerCount          Int      @default(1)
+  mileage                 Decimal? @db.Decimal(10, 2) // Kilometers
+  duration                Int?     // Minutes
+  baseFare                Decimal  @db.Decimal(10, 2)
+  mileageRate             Decimal? @db.Decimal(10, 2) // Per kilometer
+  accessibilitySurcharge  Decimal  @default(0) @db.Decimal(10, 2)
+  totalCost               Decimal  @db.Decimal(10, 2)
+  billingPeriodId         String?
+  billingPeriod           UsageBillingPeriod? @relation(fields: [billingPeriodId], references: [id])
+  invoiceId               String?
+  invoice                 Invoice? @relation(fields: [invoiceId], references: [id])
+  usageRecordId           String?  // Link to usage record for service hours
+  notes                   String?  @db.Text
+  cancellationReason      String?  @db.Text
+  cancelledAt             DateTime?
+  metadata                Json?    // Additional booking data
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  
+  @@index([participantId])
+  @@index([driverId])
+  @@index([status])
+  @@index([scheduledPickupTime])
+  @@index([serviceType])
+  @@index([billingPeriodId])
+  @@index([invoiceId])
 }

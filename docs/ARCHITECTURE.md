@@ -1,8 +1,8 @@
-# AbilityPay Protocol - System Architecture
+# AbilityPay - System Architecture
 
 ## Executive Summary
 
-The AbilityPay Protocol is a blockchain-agnostic payment system for NDIS (National Disability Insurance Scheme) that tokenizes participant budgets as programmable "smart money" while maintaining fiat currency settlement through multiple payment channels including Australia's New Payments Platform (NPP), Coinbase Commerce, and direct Ethereum blockchain transactions via MetaMask.
+AbilityPay is your disability care and support payment platform - a programmable fiat abstraction layer for NDIS payments. It is a blockchain-agnostic payment system for NDIS (National Disability Insurance Scheme) that tokenizes participant budgets as programmable "smart money" while maintaining fiat currency settlement through multiple payment channels including Australia's New Payments Platform (NPP), Coinbase Commerce, and direct Ethereum blockchain transactions via MetaMask.
 
 ## System Overview
 
@@ -703,4 +703,4 @@ interface BlockchainAdapter {
 
 ## Conclusion
 
-The AbilityPay Protocol architecture provides a robust, scalable, and secure foundation for blockchain-based NDIS payments while maintaining integration with traditional banking infrastructure. The modular design allows for easy extension and adaptation to changing requirements.
+The AbilityPay system architecture provides a robust, scalable, and secure foundation for blockchain-based NDIS payments while maintaining integration with traditional banking infrastructure. The modular design allows for easy extension and adaptation to changing requirements.

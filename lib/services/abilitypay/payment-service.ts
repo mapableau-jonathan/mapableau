@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { ValidationService } from "./validation-service";
 import { TokenService } from "./token-service";
 import { PaymentProviderService } from "./banking/payment-provider";
+import { usageTracker } from "../usage/usage-tracker";
 import type { BlockchainAdapterConfig } from "./types";
 
 export interface InitiatePaymentData {

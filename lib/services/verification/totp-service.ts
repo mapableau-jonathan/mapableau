@@ -23,7 +23,7 @@ export interface TOTPVerificationResult {
 }
 
 export interface TOTPConfig {
-  issuer?: string; // Service name (e.g., "AbilityPay Protocol")
+  issuer?: string; // Service name (e.g., "AbilityPay")
   label?: string; // Account label (e.g., user email)
   algorithm?: "sha1" | "sha256" | "sha512";
   digits?: number; // 6 or 8
@@ -42,7 +42,7 @@ export class TOTPService {
     digits?: number;
     period?: number;
   }) {
-    this.defaultIssuer = config?.issuer || process.env.TOTP_ISSUER || "AbilityPay Protocol";
+    this.defaultIssuer = config?.issuer || process.env.TOTP_ISSUER || "AbilityPay";
     this.defaultAlgorithm = config?.algorithm || "sha1"; // Google Authenticator uses SHA1
     this.defaultDigits = config?.digits || 6; // Google Authenticator uses 6 digits
     this.defaultPeriod = config?.period || 30; // 30 seconds per code

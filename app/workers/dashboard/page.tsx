@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { VerificationStatusCard } from "@/components/workers/verification-status";
-import { AlertService } from "@/lib/services/alerts/alert-service";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
@@ -70,6 +69,15 @@ export default function WorkerDashboardPage() {
 
       const data = await response.json();
       setVerifications(data.verifications || []);
+      
+      // Extract alerts from verifications
+      const allAlerts: any[] = [];
+      data.verifications?.forEach((v: any) => {
+        if (v.alerts && v.alerts.length > 0) {
+          allAlerts.push(...v.alerts);
+        }
+      });
+      setAlerts(allAlerts);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load verifications");
     } finally {
@@ -78,12 +86,8 @@ export default function WorkerDashboardPage() {
   };
 
   const fetchAlerts = async () => {
-    try {
-      // This would fetch alerts for the worker
-      // For now, we'll get them from the verifications response
-    } catch (err) {
-      console.error("Error fetching alerts:", err);
-    }
+    // Alerts are now fetched as part of verifications
+    // This function is kept for future API endpoint if needed
   };
 
   const handleRecheck = async (verificationId: string, type: string) => {

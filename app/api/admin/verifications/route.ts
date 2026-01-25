@@ -9,7 +9,7 @@ import { userWithWorker } from "@/lib/utils/db-optimization";
  * Elegant route using route handler utilities
  */
 export const GET = createGetHandler(
-  async () => {
+  async (request, { user }) => {
     const workers = await prisma.worker.findMany({
       include: userWithWorker,
       orderBy: { createdAt: "desc" },

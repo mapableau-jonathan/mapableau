@@ -10,7 +10,7 @@ import { TOTPService } from "@/lib/services/verification/totp-service";
 import { logger } from "@/lib/logger";
 
 const totpService = new TOTPService({
-  issuer: process.env.TOTP_ISSUER || "AbilityPay Protocol",
+  issuer: process.env.TOTP_ISSUER || "AbilityPay",
 });
 
 export async function POST(request: NextRequest) {

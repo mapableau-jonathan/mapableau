@@ -18,13 +18,8 @@ const predictionSchema = z.object({
 
 export async function POST(req: Request) {
   try {
+    // requireAuth() throws an error if user is not authenticated, it never returns null
     const user = await requireAuth();
-    if (!user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
 
     const body = await req.json();
     const data = predictionSchema.parse(body);
@@ -94,7 +89,13 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ prediction });
   } catch (error) {
-    console.error("Error generating prediction:", error);
+    // Handle authentication errors properly - return 401 instead of 500
+    if (error instanceof Error && error.message.includes("Unauthorized")) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -103,6 +104,7 @@ export async function POST(req: Request) {
       );
     }
 
+    console.error("Error generating prediction:", error);
     return NextResponse.json(
       { error: "Failed to generate prediction" },
       { status: 500 }

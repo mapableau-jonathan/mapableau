@@ -118,9 +118,9 @@ npm install @simplewebauthn/server
 
 ### 3. Configure Environment
 ```env
-TOTP_ISSUER="AbilityPay Protocol"
+TOTP_ISSUER="AbilityPay"
 WEBAUTHN_RP_ID=yourdomain.com
-WEBAUTHN_RP_NAME="AbilityPay Protocol"
+WEBAUTHN_RP_NAME="AbilityPay"
 WEBAUTHN_ORIGIN=https://yourdomain.com
 ```
 

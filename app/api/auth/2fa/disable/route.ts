@@ -11,7 +11,7 @@ import { z } from "zod";
 import { logger } from "@/lib/logger";
 
 const totpService = new TOTPService({
-  issuer: process.env.TOTP_ISSUER || "AbilityPay Protocol",
+  issuer: process.env.TOTP_ISSUER || "AbilityPay",
 });
 
 const disableSchema = z.object({

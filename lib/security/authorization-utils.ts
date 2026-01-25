@@ -93,9 +93,17 @@ export async function getCurrentUser(request?: Request): Promise<UserData | null
  * Optimized to accept optional request for caching
  */
 export async function requireAuth(request?: Request): Promise<UserData> {
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/90906fb2-e03f-4462-b777-c144956c4be9',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/security/authorization-utils.ts:95',message:'requireAuth entry',data:{hypothesis:'A'},timestamp:Date.now(),sessionId:'debug-session',runId:'initial',hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
   const user = await getCurrentUser(request);
-  
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/90906fb2-e03f-4462-b777-c144956c4be9',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/security/authorization-utils.ts:98',message:'getCurrentUser result',data:{userExists:!!user,userId:user?.id,hypothesis:'A'},timestamp:Date.now(),sessionId:'debug-session',runId:'initial',hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
   if (!user) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/90906fb2-e03f-4462-b777-c144956c4be9',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/security/authorization-utils.ts:99',message:'throwing Unauthorized error',data:{errorMessage:"Unauthorized: Authentication required",hypothesis:'A'},timestamp:Date.now(),sessionId:'debug-session',runId:'initial',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     throw new Error("Unauthorized: Authentication required");
   }
 

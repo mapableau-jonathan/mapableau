@@ -1,4 +1,4 @@
-# AbilityPay Protocol - Implementation Status
+# AbilityPay - Implementation Status
 
 This document tracks the implementation status of each architectural component.
 

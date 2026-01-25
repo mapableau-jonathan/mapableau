@@ -1,6 +1,6 @@
 # Stripe Tax Integration
 
-The AbilityPay Protocol now includes Stripe Tax integration for automatic tax calculation and compliance.
+The AbilityPay now includes Stripe Tax integration for automatic tax calculation and compliance.
 
 ## Overview
 

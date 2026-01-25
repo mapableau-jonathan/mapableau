@@ -1,6 +1,6 @@
 /**
  * Ethereum DLT Service
- * Direct Ethereum blockchain interactions for AbilityPay Protocol
+ * Direct Ethereum blockchain interactions for AbilityPay
  * 
  * This service handles:
  * - Direct blockchain transactions

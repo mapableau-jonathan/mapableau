@@ -12,6 +12,9 @@ const verificationTypeSchema = z.enum([
   "WWCC",
   "NDIS",
   "FIRST_AID",
+  "ABN",
+  "TFN",
+  "NDIS_WORKER_CHECK",
 ]);
 
 export async function POST(
