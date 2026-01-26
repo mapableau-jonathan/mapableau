@@ -13,7 +13,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint:fix": "eslint . --ext .js,.jsx,.ts,.tsx --fix",
-    "prepare": "husky install",
+    "prepare": "husky install && prisma generate",
     "lint-staged": "lint-staged",
     "prepush": "pnpm type-check && pnpm format:check && pnpm lint && pnpm lint-staged"
   },
@@ -28,11 +28,11 @@
   "license": "ISC",
   "packageManager": "pnpm@10.12.1",
   "dependencies": {
-    "@prisma/client": "^6.0.0",
+    "@prisma/client": "6.19.2",
     "@radix-ui/react-slot": "^1.2.4",
     "@sendgrid/mail": "^8.1.6",
     "@tanstack/react-query": "^5.90.16",
-    "argon2": "^0.31.2",
+    "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "embla-carousel-autoplay": "^8.6.0",
@@ -66,7 +66,7 @@
     "postcss": "^8.4.47",
     "prettier": "^3.6.2",
     "prettier-eslint": "^16.4.2",
-    "prisma": "^6.0.0",
+    "prisma": "^6.19.2",
     "typescript": "^5.0.0"
   }
 }

@@ -1,4 +1,4 @@
-import { hash } from "argon2";
+import { hash } from "bcryptjs";
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
@@ -25,13 +25,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Failed to register" }, { status: 400 });
   }
 
-  const passwordHash = await hash(password);
+  const passwordHash = await hash(password, 10); // 10 is the salt rounds
 
   const user = await prisma.user.create({
     data: {
       name,
       email,
-      passwordHash,
+      passwordHash: passwordHash,
     },
   });
 

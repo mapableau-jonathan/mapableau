@@ -1,4 +1,4 @@
-import { verify } from "argon2";
+import { compare } from "bcryptjs";
 import type { AuthOptions } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 
@@ -25,7 +25,7 @@ export const authOptions: AuthOptions = {
 
         if (!user) return null;
 
-        const valid = await verify(user.passwordHash, credentials.password);
+        const valid = await compare(credentials.password, user.passwordHash);
         if (!valid) return null;
 
         return {
@@ -40,4 +40,3 @@ export const authOptions: AuthOptions = {
     signIn: "/login",
   },
 };
-
