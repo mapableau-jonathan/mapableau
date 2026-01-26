@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createContext, useContext, ReactNode } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 
 interface User {
   id: string;
@@ -70,3 +70,4 @@ export function useAuth() {
   }
   return context;
 }
+
