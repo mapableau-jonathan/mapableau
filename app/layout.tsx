@@ -1,4 +1,5 @@
 import "@/app/index.css";
+import "leaflet/dist/leaflet.css";
 
 import { BrandProvider } from "@/app/contexts/BrandContext";
 
