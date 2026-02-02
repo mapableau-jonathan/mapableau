@@ -1,13 +1,15 @@
 /**
  * Usage Tracking Middleware
  * Tracks API calls for billing purposes
+ *
+ * Uses getToken from next-auth/jwt (not getServerSession) so this module can run
+ * in the Edge runtime without pulling in openid-client (which uses Node's util.inspect.custom).
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { getToken } from "next-auth/jwt";
 import { usageTracker } from "../services/usage/usage-tracker";
 import { logger } from "../logger";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 // Routes to exclude from usage tracking
 const EXCLUDED_ROUTES = [
@@ -52,10 +54,14 @@ export async function trackUsage(
   }
 
   try {
-    // Get user session (non-blocking)
-    const session = await getServerSession(authOptions).catch(() => null);
+    // Get JWT payload (Edge-safe; does not pull in openid-client)
+    const token = await getToken({
+      req: request,
+      secret: process.env.NEXTAUTH_SECRET,
+    }).catch(() => null);
 
-    if (!session?.user?.id) {
+    const userId = token?.id ?? token?.sub;
+    if (!userId) {
       return; // Don't track unauthenticated requests
     }
 
@@ -73,7 +79,7 @@ export async function trackUsage(
         const duration = Date.now() - startTime;
 
         await usageTracker.trackApiCall(
-          session.user.id,
+          userId,
           endpoint,
           method,
           duration,
@@ -112,14 +118,18 @@ export async function trackUsageFromResponse(
   }
 
   try {
-    const session = await getServerSession(authOptions).catch(() => null);
+    const token = await getToken({
+      req: request,
+      secret: process.env.NEXTAUTH_SECRET,
+    }).catch(() => null);
 
-    if (!session?.user?.id) {
+    const userId = token?.id ?? token?.sub;
+    if (!userId) {
       return;
     }
 
     await usageTracker.trackApiCall(
-      session.user.id,
+      userId,
       pathname,
       request.method,
       responseTime,
