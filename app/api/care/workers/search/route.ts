@@ -1,6 +1,8 @@
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+
+import { prisma } from "@/lib/prisma";
 
 const searchSchema = z.object({
   query: z.string().optional(),
@@ -26,7 +28,7 @@ export async function GET(req: Request) {
     const validated = searchSchema.parse(params);
 
     // Build where clause - require verified workers with NDIS verification
-    const where: any = {
+    const where: Prisma.WorkerWhereInput = {
       status: "VERIFIED", // Only show verified workers
       verifications: {
         some: {

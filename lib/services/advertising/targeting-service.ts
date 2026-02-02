@@ -4,8 +4,10 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { sponsoredMarkersConfig } from "@/lib/config/sponsored-markers";
 import type { AdRequestContext, EligibleAd } from "./types";
 import type { Advertisement, AdCampaign, BusinessCategory } from "@prisma/client";
+import type { SponsorshipTier } from "@prisma/client";
 
 export class TargetingService {
   /**
@@ -47,18 +49,57 @@ export class TargetingService {
       include: {
         campaign: true,
         business: {
-          select: {
-            id: true,
-            name: true,
-            category: true,
-            latitude: true,
-            longitude: true,
+          include: {
+            placeVerifications: {
+              take: 1,
+              orderBy: { verifiedAt: "desc" as const },
+              where: {
+                OR: [
+                  { expiresAt: null },
+                  { expiresAt: { gt: now } },
+                ],
+              },
+            },
+            sponsorships: {
+              where: {
+                status: "ACTIVE",
+                startAt: { lte: now },
+                OR: [
+                  { endAt: null },
+                  { endAt: { gte: now } },
+                ],
+              },
+              take: 1,
+            },
           },
         },
       },
     });
 
     for (const ad of ads) {
+      // PRD: SPONSORED_MARKER only for businesses with active Sponsorship and required verification tier
+      if (ad.type === "SPONSORED_MARKER") {
+        const business = ad.business as {
+          id: string;
+          placeVerifications: { tier: string }[];
+          sponsorships: { tier: SponsorshipTier }[];
+        };
+        const activeSponsorship = business.sponsorships?.[0];
+        const verificationTier = business.placeVerifications?.[0]?.tier;
+        const allowedTiers = activeSponsorship
+          ? sponsoredMarkersConfig.minVerificationTierForSponsorshipTier[
+              activeSponsorship.tier
+            ]
+          : [];
+        if (
+          !activeSponsorship ||
+          !verificationTier ||
+          !allowedTiers.includes(verificationTier as "BRONZE" | "SILVER" | "GOLD")
+        ) {
+          continue; // Skip: not eligible for sponsored marker
+        }
+      }
+
       const targetingMatch = await this.checkTargeting(ad, context);
       if (targetingMatch.matches) {
         eligibleAds.push({

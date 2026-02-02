@@ -48,6 +48,12 @@ module.exports = {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
+        "primary-logo": {
+          DEFAULT: "hsl(var(--primary-logo))",
+          foreground: "0 0% 100%",
+        },
+        "green-light": "hsl(var(--green-light))",
+        "green-dark": "hsl(var(--green-dark))",
       },
       fontFamily: {
         sans: ["Plus Jakarta Sans", "sans-serif"],

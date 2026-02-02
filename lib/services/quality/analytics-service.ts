@@ -1,9 +1,26 @@
 /**
  * Quality Analytics Service
- * Core analytics logic for quality metrics and KPIs
+ * 
+ * Core analytics logic for quality metrics and KPIs.
+ * Provides comprehensive quality reporting including service delivery KPIs, participant
+ * satisfaction, provider performance, incident trends, and compliance metrics.
+ * 
+ * @example
+ * ```typescript
+ * const analyticsService = new QualityAnalyticsService();
+ * const metrics = await analyticsService.getQualityMetrics(
+ *   new Date('2024-01-01'),
+ *   new Date('2024-12-31')
+ * );
+ * ```
+ * 
+ * @uses BaseAnalyticsService for common analytics utilities
  */
 
+// Internal utilities
 import { prisma } from "../../prisma";
+
+// Local relative imports
 import { BaseAnalyticsService } from "../analytics/base-analytics-service";
 
 export interface QualityMetrics {
@@ -50,6 +67,12 @@ export interface QualityMetrics {
   };
 }
 
+/**
+ * Quality Analytics Service
+ * 
+ * Provides comprehensive quality metrics and KPIs for service delivery, participant
+ * satisfaction, provider performance, incidents, complaints, and compliance.
+ */
 export class QualityAnalyticsService {
   private baseAnalytics: BaseAnalyticsService;
 
@@ -59,6 +82,14 @@ export class QualityAnalyticsService {
 
   /**
    * Get comprehensive quality metrics
+   * 
+   * Calculates quality metrics across all domains including service delivery KPIs,
+   * participant satisfaction ratings, provider performance scores, incident and complaint
+   * trends, care plan metrics, and worker compliance rates.
+   * 
+   * @param startDate - Optional start date for metrics period
+   * @param endDate - Optional end date for metrics period
+   * @returns Promise resolving to QualityMetrics with all quality indicators
    */
   async getQualityMetrics(
     startDate?: Date,

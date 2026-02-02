@@ -66,6 +66,9 @@ export function SponsoredMarker({ ad, onClick }: SponsoredMarkerProps) {
                   {ad.description}
                 </p>
               )}
+              <p className="text-xs text-muted-foreground mb-2" role="region" aria-label="Why am I seeing this?">
+                This venue is a sponsored listing and meets your filters. Sponsored placement never overrides accessibility results.
+              </p>
               {ad.callToAction && (
                 <button
                   onClick={onClick}

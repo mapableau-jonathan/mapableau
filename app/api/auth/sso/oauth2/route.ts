@@ -3,6 +3,10 @@
  * Initiates OAuth2 SSO flow
  */
 
+// Force Node.js runtime (required for argon2 native module via passport-adapter)
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { initiateOAuth2 } from "@/lib/auth/passport-adapter";
 import { logger } from "@/lib/logger";

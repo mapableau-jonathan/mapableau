@@ -1,14 +1,24 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useGoogleMaps } from "@/hooks/use-google-maps";
 import { googleMapsConfig } from "@/lib/config/google-maps";
+import type { FeatureCollection } from "geojson";
 import type { MapMarker } from "./Map";
+
+export interface GoogleMapMarker extends MapMarker {
+  position: [number, number] | { lat: number; lng: number };
+  isSponsored?: boolean;
+  disclosureText?: string | null;
+  placeId?: string;
+}
 
 export interface GoogleMapProps {
   center?: { lat: number; lng: number };
   zoom?: number;
-  markers?: MapMarker[];
+  markers?: GoogleMapMarker[];
+  /** Optional GeoJSON overlay (e.g. imported JSON data). */
+  geoJson?: FeatureCollection | null;
   className?: string;
   height?: string;
   enable3DBuildings?: boolean;
@@ -28,6 +38,7 @@ export function GoogleMap({
   },
   zoom = googleMapsConfig.mapOptions.defaultZoom,
   markers = [],
+  geoJson,
   className = "",
   height = "400px",
   enable3DBuildings = googleMapsConfig.buildings3DEnabled,
@@ -42,6 +53,7 @@ export function GoogleMap({
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<google.maps.Marker[]>([]);
+  const dataLayerRef = useRef<google.maps.Data | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const { isLoaded: apiLoaded, loadError } = useGoogleMaps();
 
@@ -175,20 +187,35 @@ export function GoogleMap({
     // Add new markers
     markers.forEach((markerData) => {
       const position = markerData.position as [number, number];
+      const lat = Array.isArray(position) ? position[0] : position.lat;
+      const lng = Array.isArray(position) ? position[1] : position.lng;
+      const isSponsored = markerData.isSponsored ?? false;
       const marker = new google.maps.Marker({
-        position: new google.maps.LatLng(position[0], position[1]),
+        position: new google.maps.LatLng(lat, lng),
         map: mapInstanceRef.current!,
         title: markerData.title,
         animation: google.maps.Animation.DROP,
+        icon: isSponsored
+          ? undefined
+          : undefined,
+        label: isSponsored ? "S" : undefined,
       });
 
-      // Add info window if title or description
-      if (markerData.title || markerData.description) {
+      // Add info window if title or description or disclosure
+      if (markerData.title || markerData.description || markerData.disclosureText) {
+        const sponsoredPill = isSponsored
+          ? '<span style="display:inline-block;font-size:11px;background:#dbeafe;color:#1e40af;padding:2px 6px;border-radius:4px;margin-bottom:6px;">Sponsored</span>'
+          : "";
+        const disclosureBlock = markerData.disclosureText
+          ? `<p style="margin:6px 0 0;font-size:12px;color:#6b7280;" role="region" aria-label="Why am I seeing this?">${markerData.disclosureText}</p>`
+          : "";
         const infoWindow = new google.maps.InfoWindow({
           content: `
             <div style="padding: 8px; min-width: 200px;">
+              ${sponsoredPill}
               ${markerData.title ? `<h3 style="margin: 0 0 4px 0; font-weight: 600;">${markerData.title}</h3>` : ""}
               ${markerData.description ? `<p style="margin: 0; font-size: 14px; color: #666;">${markerData.description}</p>` : ""}
+              ${disclosureBlock}
             </div>
           `,
         });
@@ -196,18 +223,50 @@ export function GoogleMap({
         marker.addListener("click", () => {
           infoWindow.open(mapInstanceRef.current!, marker);
           if (onMarkerClick) {
-            onMarkerClick(markerData);
+            onMarkerClick(markerData as MapMarker);
           }
         });
       } else if (onMarkerClick) {
         marker.addListener("click", () => {
-          onMarkerClick(markerData);
+          onMarkerClick(markerData as MapMarker);
         });
       }
 
       markersRef.current.push(marker);
     });
   }, [markers, isLoaded, onMarkerClick]);
+
+  // GeoJSON overlay (imported JSON data)
+  useEffect(() => {
+    if (!mapInstanceRef.current || !isLoaded) return;
+
+    const map = mapInstanceRef.current;
+
+    // Remove existing data layer
+    if (dataLayerRef.current) {
+      dataLayerRef.current.setMap(null);
+      dataLayerRef.current = null;
+    }
+
+    if (geoJson?.features?.length) {
+      const dataLayer = new google.maps.Data({ map });
+      dataLayer.addGeoJson(geoJson as google.maps.Data.GeoJsonOptions);
+      dataLayer.setStyle({
+        strokeColor: "#1e40af",
+        strokeWeight: 2,
+        fillColor: "#3b82f6",
+        fillOpacity: 0.2,
+      });
+      dataLayerRef.current = dataLayer;
+    }
+
+    return () => {
+      if (dataLayerRef.current) {
+        dataLayerRef.current.setMap(null);
+        dataLayerRef.current = null;
+      }
+    };
+  }, [geoJson, isLoaded]);
 
   if (loadError) {
     return (

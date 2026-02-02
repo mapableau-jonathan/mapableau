@@ -21,6 +21,11 @@ const envSchema = z.object({
   AZURE_AD_CLIENT_ID: z.string().optional(),
   AZURE_AD_CLIENT_SECRET: z.string().optional(),
   AZURE_AD_TENANT_ID: z.string().optional(),
+  // Auth0 for Australian Disability Ltd (Organizational Launchpad)
+  AUTH0_CLIENT_ID: z.string().optional(),
+  AUTH0_CLIENT_SECRET: z.string().optional(),
+  AUTH0_ISSUER: z.string().url("AUTH0_ISSUER must be a valid URL").optional(),
+  AUTH0_AUDIENCE: z.string().optional(),
   WIX_CLIENT_ID: z.string().optional(),
   WIX_CLIENT_SECRET: z.string().optional(),
   WIX_APP_ID: z.string().optional(),

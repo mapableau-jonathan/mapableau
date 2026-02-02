@@ -4,6 +4,8 @@
 // Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
+// Prisma CLI loads only .env in the project root (not .env.local). Ensure DATABASE_URL is set there for db push/migrate.
+
 generator client {
   provider = "prisma-client-js"
   output   = "../node_modules/.prisma/client"
@@ -69,6 +71,13 @@ model User {
   messages             Message[] @relation("UserMessages")
   notifications        Notification[] @relation("UserNotifications")
   supportTickets       SupportTicket[] @relation("UserSupportTickets")
+  sponsoredVenues      Sponsorship[]   @relation("SponsorOrg")
+  venueReports         VenueReport[]   @relation("VenueReportReporter")
+  // Usage & billing
+  usageRecords         UsageRecord[]
+  usageBillingPeriods   UsageBillingPeriod[]
+  savedPaymentMethods   SavedPaymentMethod[]
+  participantTransportBookings TransportBooking[] @relation("ParticipantTransportBookings")
 }
 
 model Account {
@@ -150,6 +159,7 @@ model Worker {
   carePlans       CarePlan[]
   careNotes       CareNote[]
   paymentTransactions PaymentTransaction[]
+  driverTransportBookings TransportBooking[] @relation("DriverTransportBookings")
 
   @@index([userId])
   @@index([status])
@@ -408,6 +418,32 @@ model ProviderRegistration {
   @@index([abn])
   @@index([registrationStatus])
   @@index([expiresAt])
+}
+
+/// NDIS Provider Finder: ingested from ndis.gov.au list-providers.json
+model NdisFinderProvider {
+  id                 String   @id @default(cuid())
+  externalId         String   @unique // provider number or NDIS-assigned id from source
+  name               String?
+  abn                String?
+  suburb             String?
+  state              String?
+  postcode           String?
+  registrationGroups String[] // support categories / registration groups
+  raw                Json     // full object from NDIS JSON for flexibility
+  ingestedAt         DateTime @default(now())
+
+  @@index([name])
+  @@index([postcode])
+  @@index([state])
+  @@index([suburb])
+}
+
+/// Single-row state for NDIS provider-finder ingest (ETag caching)
+model NdisFinderIngestMeta {
+  id             String    @id @default("default")
+  lastEtag       String?
+  lastIngestedAt DateTime?
 }
 
 // Compliance & Policy Management Models
@@ -986,6 +1022,10 @@ model Business {
   verified          Boolean           @default(false)
   verifiedAt        DateTime?
   
+  // Quality Score (PRD: community_score, accessibility confidence)
+  communityScore         Float?             // 0-1 or 0-100
+  accessibilityConfidence Float?           // Derived from accessibility + verification
+  
   // Analytics
   viewCount         Int               @default(0)
   clickCount        Int               @default(0)
@@ -996,6 +1036,9 @@ model Business {
   
   advertisements    Advertisement[]
   reviews           BusinessReview[]
+  placeVerifications PlaceVerification[]
+  sponsorships      Sponsorship[]
+  venueReports      VenueReport[]
   
   @@index([category])
   @@index([status])
@@ -1123,6 +1166,128 @@ model AdCampaign {
   @@index([advertiserId])
   @@index([status])
   @@index([startDate, endDate])
+}
+
+// Sponsored Marker System (PRD)
+enum PlaceVerificationMethod {
+  MAPABLE_ACCREDITATION
+  TRUSTED_PARTNER_AUDIT
+  COMMUNITY_EVIDENCE
+}
+
+enum PlaceVerificationTier {
+  BRONZE
+  SILVER
+  GOLD
+}
+
+enum SponsorshipTier {
+  COMMUNITY_SUPPORTER
+  FEATURED_ACCESSIBLE_VENUE
+  ACCESSIBILITY_LEADER
+}
+
+enum SponsorshipStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  ENDED
+}
+
+enum VenueReportType {
+  ACCESSIBILITY
+  SPONSORSHIP
+}
+
+enum VenueReportStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  DISMISSED
+}
+
+enum SponsorshipAuditAction {
+  APPROVED
+  DEBOOST
+  SUSPENDED
+  REINSTATED
+  ENDED
+  WARNING
+}
+
+model PlaceVerification {
+  id           String                  @id @default(cuid())
+  businessId   String
+  business     Business                @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  method       PlaceVerificationMethod
+  tier         PlaceVerificationTier
+  verifiedAt   DateTime                @default(now())
+  expiresAt    DateTime?
+  evidenceRefs  Json?                   // Array of URLs or refs
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+
+  @@index([businessId])
+  @@index([tier])
+  @@index([expiresAt])
+}
+
+model Sponsorship {
+  id              String           @id @default(cuid())
+  businessId      String
+  business        Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  sponsorOrgId    String           // User ID (venue/business owner or org)
+  sponsorOrg      User             @relation("SponsorOrg", fields: [sponsorOrgId], references: [id], onDelete: Cascade)
+  tier            SponsorshipTier
+  targetingRules  Json?            // Targeting rules
+  boostPolicy     Json?            // e.g. { maxBoost, deboostUntil }
+  startAt         DateTime
+  endAt           DateTime?
+  status          SponsorshipStatus @default(PENDING)
+  advertisementId String?          // Optional link to Advertisement for creative/billing
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  auditLog        SponsorshipAuditLog[]
+
+  @@index([businessId])
+  @@index([sponsorOrgId])
+  @@index([status])
+  @@index([startAt, endAt])
+}
+
+model SponsorshipAuditLog {
+  id             String                @id @default(cuid())
+  sponsorshipId  String
+  sponsorship    Sponsorship           @relation(fields: [sponsorshipId], references: [id], onDelete: Cascade)
+  action         SponsorshipAuditAction
+  reason         String?               @db.Text
+  actorId        String?
+  metadata       Json?
+  createdAt      DateTime              @default(now())
+
+  @@index([sponsorshipId])
+  @@index([createdAt])
+}
+
+model VenueReport {
+  id             String           @id @default(cuid())
+  userId         String
+  user           User             @relation("VenueReportReporter", fields: [userId], references: [id], onDelete: Cascade)
+  businessId     String
+  business       Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  sponsorshipId  String?          // Optional, for sponsorship-specific reports
+  type           VenueReportType
+  description    String           @db.Text
+  status         VenueReportStatus @default(OPEN)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  resolvedAt     DateTime?
+  resolvedBy    String?
+
+  @@index([businessId])
+  @@index([userId])
+  @@index([type])
+  @@index([status])
 }
 
 // WebAuthn Biometric Authentication
@@ -1346,6 +1511,7 @@ model Invoice {
   // Usage-based billing
   isUsageBased      Boolean         @default(false)
   usageBillingPeriods UsageBillingPeriod[]
+  transportBookings TransportBooking[]
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
@@ -1475,6 +1641,8 @@ enum SupportTicketCategory {
   SERVICE
   FEATURE_REQUEST
   BUG_REPORT
+  ACCESSIBILITY_REPORT
+  SPONSORSHIP_REPORT
   OTHER
 }
 
@@ -1592,6 +1760,7 @@ model UsageBillingPeriod {
   invoiceId     String?
   invoice       Invoice? @relation(fields: [invoiceId], references: [id])
   usageRecords  UsageRecord[]
+  transportBookings TransportBooking[]
   createdAt     DateTime @default(now())
   closedAt      DateTime?
   

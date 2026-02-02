@@ -1,9 +1,27 @@
 /**
  * Billing Analytics Service
- * Provides revenue, cost, and profit analytics (Admin-Only)
+ * 
+ * Provides comprehensive revenue, cost, and profit analytics for administrative use.
+ * This service aggregates billing data from invoices and usage records to provide
+ * financial insights and reporting capabilities.
+ * 
+ * @example
+ * ```typescript
+ * const analyticsService = new BillingAnalyticsService();
+ * const analytics = await analyticsService.getBillingAnalytics(
+ *   new Date('2024-01-01'),
+ *   new Date('2024-12-31')
+ * );
+ * ```
+ * 
+ * @requires Admin role for access
+ * @uses BaseAnalyticsService for common analytics utilities
  */
 
+// Internal utilities
 import { prisma } from "@/lib/prisma";
+
+// Local relative imports
 import { BaseAnalyticsService } from "./base-analytics-service";
 
 export interface BillingAnalytics {
@@ -33,6 +51,9 @@ export interface BillingAnalytics {
 
 /**
  * Billing Analytics Service (Admin-Only)
+ * 
+ * Provides revenue, cost, and profit analytics for administrative reporting.
+ * Aggregates data from invoices and usage records to calculate financial metrics.
  */
 export class BillingAnalyticsService {
   private baseAnalytics: BaseAnalyticsService;
@@ -43,6 +64,14 @@ export class BillingAnalyticsService {
 
   /**
    * Get comprehensive billing analytics
+   * 
+   * Calculates revenue, costs, profit, and related metrics for the specified date range.
+   * Includes breakdowns by period and by user.
+   * 
+   * @param startDate - Optional start date for analytics period
+   * @param endDate - Optional end date for analytics period
+   * @returns Promise resolving to BillingAnalytics with all financial metrics
+   * @throws Error if analytics calculation fails
    */
   async getBillingAnalytics(
     startDate?: Date,

@@ -1,10 +1,29 @@
 /**
  * Analytics Service
- * Performance reporting for publishers and advertisers
+ * 
+ * Performance reporting for publishers and advertisers in the advertising system.
+ * Provides comprehensive analytics for ad performance, revenue, and campaign effectiveness.
+ * 
+ * @example
+ * ```typescript
+ * const analyticsService = new AnalyticsService();
+ * const publisherAnalytics = await analyticsService.getPublisherAnalytics(
+ *   publisherId,
+ *   startDate,
+ *   endDate
+ * );
+ * ```
+ * 
+ * @uses BaseAnalyticsService for common analytics utilities
  */
 
-import { prisma } from "@/lib/prisma";
+// External dependencies
 import type { BusinessCategory } from "@prisma/client";
+
+// Internal utilities
+import { prisma } from "@/lib/prisma";
+
+// Local relative imports
 import { BaseAnalyticsService } from "../analytics/base-analytics-service";
 
 export interface PublisherAnalytics {
@@ -84,6 +103,12 @@ export interface AdvertiserAnalytics {
   }>;
 }
 
+/**
+ * Analytics Service
+ * 
+ * Provides performance reporting for both publishers and advertisers.
+ * Tracks impressions, clicks, revenue, spend, and conversion metrics.
+ */
 export class AnalyticsService {
   private baseAnalytics: BaseAnalyticsService;
 
@@ -93,6 +118,15 @@ export class AnalyticsService {
 
   /**
    * Get publisher analytics
+   * 
+   * Analyzes ad unit performance, revenue, and engagement metrics for a publisher
+   * over the specified date range.
+   * 
+   * @param publisherId - Publisher ID to analyze
+   * @param startDate - Start date for analytics period
+   * @param endDate - End date for analytics period
+   * @returns Promise resolving to PublisherAnalytics with all publisher metrics
+   * @throws Error if publisher not found or analytics calculation fails
    */
   async getPublisherAnalytics(
     publisherId: string,
@@ -184,6 +218,15 @@ export class AnalyticsService {
 
   /**
    * Get advertiser analytics
+   * 
+   * Analyzes campaign and ad performance, spend, conversions, and ROI metrics
+   * for an advertiser over the specified date range.
+   * 
+   * @param advertiserId - Advertiser ID to analyze
+   * @param startDate - Start date for analytics period
+   * @param endDate - End date for analytics period
+   * @returns Promise resolving to AdvertiserAnalytics with all advertiser metrics
+   * @throws Error if advertiser not found or analytics calculation fails
    */
   async getAdvertiserAnalytics(
     advertiserId: string,

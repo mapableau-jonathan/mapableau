@@ -4,6 +4,7 @@ import Autoplay from "embla-carousel-autoplay";
 import useEmblaCarousel from "embla-carousel-react";
 import { motion } from "framer-motion";
 import {
+  Accessibility,
   ArrowRight,
   ChevronLeft,
   ChevronRight,
@@ -11,6 +12,7 @@ import {
   Pause,
   Play,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
@@ -28,6 +30,7 @@ interface ServiceSlideProps {
 function ServiceSlide({ module }: ServiceSlideProps) {
   const { iconStyle } = useBrandSafe();
   const currentLogo = module.icons?.[iconStyle] || module.logo;
+  const [imageError, setImageError] = useState(false);
 
   return (
     <Link href={module.href}>
@@ -43,16 +46,26 @@ function ServiceSlide({ module }: ServiceSlideProps) {
           <CardContent className="p-6 h-full flex flex-col">
             <div className="flex items-center gap-4 mb-4">
               <div
-                className="p-4 rounded-2xl shadow-sm"
-                style={{
-                  background: `linear-gradient(135deg, ${module.color}30, ${module.color}10)`,
-                }}
+                className={`carousel-module-icon-bg-${module.key} p-4 rounded-2xl shadow-sm`}
               >
-                <img
-                  src={currentLogo}
-                  alt={module.name}
-                  className="h-14 w-14 object-contain drop-shadow"
-                />
+                {imageError ? (
+                  <div
+                    className="h-14 w-14 flex items-center justify-center rounded-lg text-2xl font-bold text-white drop-shadow"
+                    style={{ backgroundColor: module.color }}
+                    aria-hidden
+                  >
+                    {module.shortName.charAt(0)}
+                  </div>
+                ) : (
+                  <Image
+                    src={currentLogo}
+                    alt={module.name}
+                    width={56}
+                    height={56}
+                    className="h-14 w-14 object-contain drop-shadow"
+                    onError={() => setImageError(true)}
+                  />
+                )}
               </div>
               <div>
                 <h3 className="text-xl font-heading font-bold">
@@ -138,20 +151,31 @@ function AccessiViewSlide() {
                 "VR Support",
                 "Route Planning",
                 "Accessibility Info",
-              ].map((feature) => (
-                <Badge
-                  key={feature}
-                  variant="secondary"
-                  className="text-xs px-2 py-0.5 bg-indigo-100 text-indigo-700"
-                >
-                  {feature}
-                </Badge>
-              ))}
+              ].map((feature) =>
+                feature === "Accessibility Info" ? (
+                  <Badge
+                    key={feature}
+                    variant="accessible"
+                    className="text-xs px-2 py-0.5 inline-flex items-center gap-1"
+                  >
+                    <Accessibility className="h-3 w-3" aria-hidden />
+                    {feature}
+                  </Badge>
+                ) : (
+                  <Badge
+                    key={feature}
+                    variant="secondary"
+                    className="text-xs px-2 py-0.5 bg-indigo-100 text-indigo-700"
+                  >
+                    {feature}
+                  </Badge>
+                )
+              )}
             </div>
 
             <div className="flex items-center justify-end mt-auto">
               <motion.div
-                className="flex items-center gap-1 text-sm font-medium text-indigo-600"
+                className="flex items-center gap-1 text-sm font-medium text-primary-logo"
                 whileHover={{ x: 4 }}
               >
                 Explore
@@ -302,12 +326,13 @@ export function ServicesCarousel() {
         <div
           className="flex gap-2"
           data-testid="carousel-dots"
-          role="tablist"
+          role="group"
           aria-label="Carousel navigation"
         >
           {scrollSnaps.map((_, index) => (
             <button
               key={index}
+              type="button"
               onClick={() => scrollTo(index)}
               className={cn(
                 "h-3 rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
@@ -316,9 +341,7 @@ export function ServicesCarousel() {
                   : "bg-muted-foreground/30 hover:bg-muted-foreground/50 w-3"
               )}
               data-testid={`carousel-dot-${index}`}
-              aria-label={`Go to slide ${index + 1}`}
-              aria-selected={index === selectedIndex}
-              role="tab"
+              aria-label={`Go to slide ${index + 1}${index === selectedIndex ? ", current slide" : ""}`}
             />
           ))}
         </div>

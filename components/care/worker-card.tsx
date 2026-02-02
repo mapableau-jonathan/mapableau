@@ -81,31 +81,31 @@ export function WorkerCard({
             <div className="flex flex-wrap gap-2">
               {verifications.hasIdentity && (
                 <Badge variant="outline" className="text-xs">
-                  <CheckCircle2 className="h-3 w-3 mr-1 text-green-600" />
+                  <CheckCircle2 className="h-3 w-3 mr-1 text-green-light" />
                   Identity
                 </Badge>
               )}
               {verifications.hasVEVO && (
                 <Badge variant="outline" className="text-xs">
-                  <CheckCircle2 className="h-3 w-3 mr-1 text-green-600" />
+                  <CheckCircle2 className="h-3 w-3 mr-1 text-green-light" />
                   Work Rights
                 </Badge>
               )}
               {verifications.hasWWCC && (
                 <Badge variant="outline" className="text-xs">
-                  <CheckCircle2 className="h-3 w-3 mr-1 text-green-600" />
+                  <CheckCircle2 className="h-3 w-3 mr-1 text-green-light" />
                   WWCC
                 </Badge>
               )}
               {verifications.hasNDIS && (
                 <Badge variant="outline" className="text-xs">
-                  <CheckCircle2 className="h-3 w-3 mr-1 text-green-600" />
+                  <CheckCircle2 className="h-3 w-3 mr-1 text-green-light" />
                   NDIS
                 </Badge>
               )}
               {verifications.hasFirstAid && (
                 <Badge variant="outline" className="text-xs">
-                  <CheckCircle2 className="h-3 w-3 mr-1 text-green-600" />
+                  <CheckCircle2 className="h-3 w-3 mr-1 text-green-light" />
                   First Aid
                 </Badge>
               )}

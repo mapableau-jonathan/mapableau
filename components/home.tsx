@@ -154,6 +154,11 @@ export default function Home() {
             {/* )} */}
           </div>
         </div>
+        {/* Angled divider – folded map motif (light green) */}
+        <div
+          className="h-6 w-full bg-green-light/20 [clip-path:polygon(0_0,100%_0,100%_100%,0_70%)]"
+          aria-hidden
+        />
       </section>
 
       {/* Services Carousel */}
@@ -175,6 +180,11 @@ export default function Home() {
             <ServicesCarousel />
           </div>
         </div>
+        {/* Angled divider – folded map motif */}
+        <div
+          className="h-6 w-full bg-green-dark/15 [clip-path:polygon(0_30%,100%_0,100%_100%,0_100%)]"
+          aria-hidden
+        />
       </section>
 
       {/* How It Works - Compact */}
@@ -303,7 +313,7 @@ export default function Home() {
                     "Verified provider badge",
                   ].map((item, i) => (
                     <li key={i} className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-secondary flex-shrink-0" />
+                      <CheckCircle className="h-4 w-4 text-green-light flex-shrink-0" />
                       {item}
                     </li>
                   ))}

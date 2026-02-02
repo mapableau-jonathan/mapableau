@@ -1,8 +1,20 @@
 /**
  * Jobs Analytics Service
- * Provides analytics and insights for the jobs module
+ * 
+ * Provides analytics and insights for the jobs module.
+ * Tracks job listings, applications, and success rates by category and type.
+ * 
+ * @example
+ * ```typescript
+ * const analyticsService = new JobsAnalyticsService();
+ * const analytics = await analyticsService.getAnalytics();
+ * ```
+ * 
+ * @uses BaseAnalyticsService for common analytics utilities
+ * @uses JobService for job data access
  */
 
+// Local relative imports
 import { JobService } from "./job-service";
 import { BaseAnalyticsService } from "../analytics/base-analytics-service";
 
@@ -18,6 +30,12 @@ export interface JobAnalytics {
   topCategories: Array<{ category: string; count: number }>;
 }
 
+/**
+ * Jobs Analytics Service
+ * 
+ * Provides analytics for job listings including breakdowns by category, type, and status.
+ * Calculates application metrics and identifies top categories.
+ */
 export class JobsAnalyticsService {
   private jobService: JobService;
   private baseAnalytics: BaseAnalyticsService;
@@ -29,6 +47,11 @@ export class JobsAnalyticsService {
 
   /**
    * Get comprehensive job analytics
+   * 
+   * Analyzes all job listings and calculates metrics including total jobs, active/closed counts,
+   * breakdowns by category and type, and top categories.
+   * 
+   * @returns Promise resolving to JobAnalytics with all job metrics
    */
   async getAnalytics(): Promise<JobAnalytics> {
     const allJobs = await this.jobService.getJobListings({});

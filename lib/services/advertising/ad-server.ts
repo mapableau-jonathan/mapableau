@@ -142,16 +142,23 @@ export class AdServer {
 
   /**
    * Calculate quality scores for ads
+   * PRD: Include verification and accessibility in quality; respect quality floor for SPONSORED_MARKER
    */
   private async calculateQualityScores(
     eligibleAds: EligibleAd[],
     context: AdRequestContext
   ): Promise<ScoredAd[]> {
     const scoredAds: ScoredAd[] = [];
+    const qualityFloor = 0.3; // Minimum quality for SPONSORED_MARKER (0-1)
 
     for (const eligibleAd of eligibleAds) {
       const ad = eligibleAd.advertisement;
       const campaign = ad.campaign;
+      const business = ad.business as {
+        verified?: boolean;
+        placeVerifications?: { tier: string }[];
+        accessibilityConfidence?: number | null;
+      } | null;
 
       // Calculate CTR (click-through rate)
       const ctr = ad.currentImpressions > 0
@@ -164,11 +171,27 @@ export class AdServer {
       // Landing page quality (simplified - could be enhanced)
       const landingPageScore = ad.linkUrl ? 0.8 : 0.5;
 
-      // Calculate quality score
-      const qualityScore =
+      // PRD: Verification and accessibility confidence boost quality
+      let verificationScore = 0.5;
+      if (business?.verified) verificationScore = 0.7;
+      const tier = business?.placeVerifications?.[0]?.tier;
+      if (tier === "GOLD") verificationScore = 1.0;
+      else if (tier === "SILVER") verificationScore = 0.9;
+      else if (tier === "BRONZE") verificationScore = 0.8;
+      const accConf = business?.accessibilityConfidence ?? 0.5;
+      const accessibilityScore = Math.min(1, Math.max(0, Number(accConf)));
+
+      let qualityScore =
         ctr * advertisingConfig.qualityScore.ctrWeight +
         relevanceScore * advertisingConfig.qualityScore.relevanceWeight +
         landingPageScore * advertisingConfig.qualityScore.landingPageWeight;
+      qualityScore =
+        qualityScore * 0.7 + verificationScore * 0.15 + accessibilityScore * 0.15;
+
+      // PRD: Quality floor for SPONSORED_MARKER - exclude if below floor
+      if (ad.type === "SPONSORED_MARKER" && qualityScore < qualityFloor) {
+        continue;
+      }
 
       // Get bid amount
       let bidAmount = 0.01; // Default minimum bid

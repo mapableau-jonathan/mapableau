@@ -1,9 +1,27 @@
 /**
  * Payment Analytics Service
- * Provides payment provider performance analytics (Admin-Only)
+ * 
+ * Provides payment provider performance analytics for administrative use.
+ * Tracks payment transactions across multiple providers (Stripe, PayPal, NPP, Coinbase)
+ * and provides insights into success rates, volumes, and trends.
+ * 
+ * @example
+ * ```typescript
+ * const analyticsService = new PaymentAnalyticsService();
+ * const analytics = await analyticsService.getPaymentAnalytics(
+ *   new Date('2024-01-01'),
+ *   new Date('2024-12-31')
+ * );
+ * ```
+ * 
+ * @requires Admin role for access
+ * @uses BaseAnalyticsService for common analytics utilities
  */
 
+// Internal utilities
 import { prisma } from "@/lib/prisma";
+
+// Local relative imports
 import { BaseAnalyticsService } from "./base-analytics-service";
 
 export interface PaymentAnalytics {
@@ -34,6 +52,9 @@ export interface PaymentAnalytics {
 
 /**
  * Payment Analytics Service (Admin-Only)
+ * 
+ * Provides payment provider performance analytics across all payment methods.
+ * Tracks transaction success rates, volumes, and provider-specific metrics.
  */
 export class PaymentAnalyticsService {
   private baseAnalytics: BaseAnalyticsService;
@@ -44,6 +65,14 @@ export class PaymentAnalyticsService {
 
   /**
    * Get comprehensive payment analytics
+   * 
+   * Analyzes payment transactions across all providers and calculates success rates,
+   * volumes, refunds, and trends for the specified date range.
+   * 
+   * @param startDate - Optional start date for analytics period
+   * @param endDate - Optional end date for analytics period
+   * @returns Promise resolving to PaymentAnalytics with all payment metrics
+   * @throws Error if analytics calculation fails
    */
   async getPaymentAnalytics(
     startDate?: Date,

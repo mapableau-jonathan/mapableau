@@ -3,6 +3,10 @@
  * Authenticates users using Passport Local strategy and bridges to NextAuth
  */
 
+// Force Node.js runtime (required for argon2 native module via passport-adapter)
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateLocal } from "@/lib/auth/passport-adapter";
 import { createAuthErrorResponse } from "@/lib/auth/error-handler";

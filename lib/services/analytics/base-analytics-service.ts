@@ -4,7 +4,10 @@
  * Uses composition pattern - services can use these utilities without inheritance
  */
 
+// External dependencies
 import { Prisma } from "@prisma/client";
+
+// Internal utilities
 import { logger } from "@/lib/logger";
 
 /**

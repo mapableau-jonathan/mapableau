@@ -1,6 +1,37 @@
 /**
- * Service factory pattern
- * Centralizes service instantiation and configuration
+ * Service Factory Pattern
+ * 
+ * Centralizes service instantiation and configuration using singleton pattern.
+ * This ensures services are properly configured and reused across the application.
+ * 
+ * ## Usage
+ * 
+ * Instead of instantiating services directly:
+ * ```typescript
+ * // ❌ Don't do this
+ * const paymentService = new PaymentService(config);
+ * ```
+ * 
+ * Use the factory functions:
+ * ```typescript
+ * // ✅ Do this
+ * import { getPaymentService } from "@/lib/services/service-factory";
+ * const paymentService = getPaymentService();
+ * ```
+ * 
+ * ## Benefits
+ * - Ensures consistent configuration from environment variables
+ * - Prevents multiple instances of the same service
+ * - Centralizes service initialization logic
+ * - Makes testing easier (can mock factory functions)
+ * 
+ * ## Adding New Services
+ * 
+ * To add a new service to the factory:
+ * 1. Create a singleton instance variable
+ * 2. Create a getter function that initializes the service if needed
+ * 3. Use environment configuration helpers (getEnv, getBlockchainConfig, etc.)
+ * 4. Document the service's configuration requirements
  */
 
 import { PaymentService } from "./abilitypay";

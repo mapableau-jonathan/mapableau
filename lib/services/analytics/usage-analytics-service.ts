@@ -1,9 +1,27 @@
 /**
  * Usage Analytics Service
- * Provides usage analytics and metrics (Admin-Only)
+ * 
+ * Provides comprehensive usage analytics and metrics for administrative use.
+ * Tracks API calls, service hours, and storage usage across all users and provides
+ * cost analysis and trend reporting.
+ * 
+ * @example
+ * ```typescript
+ * const analyticsService = new UsageAnalyticsService();
+ * const analytics = await analyticsService.getUsageAnalytics(
+ *   new Date('2024-01-01'),
+ *   new Date('2024-12-31')
+ * );
+ * ```
+ * 
+ * @requires Admin role for access
+ * @uses BaseAnalyticsService for common analytics utilities
  */
 
+// Internal utilities
 import { prisma } from "@/lib/prisma";
+
+// Local relative imports
 import { UsageType } from "../usage/usage-tracker";
 import { BaseAnalyticsService } from "./base-analytics-service";
 
@@ -39,6 +57,9 @@ export interface UsageAnalytics {
 
 /**
  * Usage Analytics Service (Admin-Only)
+ * 
+ * Provides usage analytics and metrics tracking API calls, service hours, and storage.
+ * Aggregates usage data by user, type, and time period for cost analysis.
  */
 export class UsageAnalyticsService {
   private baseAnalytics: BaseAnalyticsService;
@@ -49,6 +70,15 @@ export class UsageAnalyticsService {
 
   /**
    * Get comprehensive usage analytics
+   * 
+   * Aggregates usage data across all users and types (API calls, service hours, storage)
+   * and calculates costs and trends for the specified date range.
+   * 
+   * @param startDate - Optional start date for analytics period
+   * @param endDate - Optional end date for analytics period
+   * @param userId - Optional user ID to filter analytics for specific user
+   * @returns Promise resolving to UsageAnalytics with all usage metrics
+   * @throws Error if analytics calculation fails
    */
   async getUsageAnalytics(
     startDate?: Date,

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import type { LatLngExpression } from "leaflet";
+import type { FeatureCollection } from "geojson";
 import "leaflet/dist/leaflet.css";
 import { useMapProvider } from "@/hooks/use-map-provider";
 import { GoogleMap } from "./GoogleMap";
@@ -28,6 +29,10 @@ const Popup = dynamic(
   () => import("react-leaflet").then((mod) => mod.Popup),
   { ssr: false }
 );
+const GeoJSON = dynamic(
+  () => import("react-leaflet").then((mod) => mod.GeoJSON),
+  { ssr: false }
+);
 
 // Fix for default marker icons in Next.js
 if (typeof window !== "undefined") {
@@ -47,30 +52,42 @@ export interface MapMarker {
   position: LatLngExpression;
   title?: string;
   description?: string;
+  /** Sponsored marker (PRD): distinct treatment and disclosure */
+  isSponsored?: boolean;
+  disclosureText?: string | null;
+  placeId?: string;
 }
+
+/** GeoJSON FeatureCollection to overlay on the map (points, lines, polygons). */
+export type MapGeoJson = FeatureCollection;
 
 export interface MapProps {
   center?: LatLngExpression;
   zoom?: number;
   markers?: MapMarker[];
+  /** Optional GeoJSON overlay (e.g. imported JSON data). */
+  geoJson?: MapGeoJson | null;
   className?: string;
   height?: string;
   provider?: MapProvider; // Override provider selection
   showProviderToggle?: boolean; // Show provider toggle UI
   enable3DBuildings?: boolean; // Enable 3D buildings (Google Maps only)
   enableStreetView?: boolean; // Enable StreetView (Google Maps only)
+  onMarkerClick?: (marker: MapMarker) => void;
 }
 
 export default function Map({
   center = [-33.8688, 151.2093], // Default to Sydney, Australia
   zoom = 13,
   markers = [],
+  geoJson = null,
   className = "",
   height = "400px",
   provider: providerOverride,
   showProviderToggle = false,
   enable3DBuildings = false,
   enableStreetView = false,
+  onMarkerClick: onMarkerClickProp,
 }: MapProps) {
   const [isClient, setIsClient] = useState(false);
   const { provider: currentProvider, capabilities } = useMapProvider();
@@ -103,12 +120,12 @@ export default function Map({
     }
   };
 
-  // Handle marker click - open StreetView if enabled
+  // Handle marker click - optional parent callback; open StreetView if enabled
   const handleMarkerClick = (marker: MapMarker) => {
+    onMarkerClickProp?.(marker);
     const position = Array.isArray(marker.position)
       ? { lat: marker.position[0], lng: marker.position[1] }
-      : { lat: (marker.position as any).lat, lng: (marker.position as any).lng };
-    
+      : { lat: (marker.position as { lat: number; lng: number }).lat, lng: (marker.position as { lat: number; lng: number }).lng };
     if (capabilities.supportsStreetView && enableStreetView) {
       setStreetViewPosition(position);
       setShowStreetView(true);
@@ -146,12 +163,16 @@ export default function Map({
         <GoogleMap
           center={getGoogleCenter()}
           zoom={zoom}
+          geoJson={geoJson ?? undefined}
           markers={markers.map((m) => ({
             position: Array.isArray(m.position)
               ? [m.position[0], m.position[1]]
               : m.position,
             title: m.title,
             description: m.description,
+            isSponsored: m.isSponsored,
+            disclosureText: m.disclosureText,
+            placeId: m.placeId,
           }))}
           className={className}
           height={height}
@@ -194,15 +215,28 @@ export default function Map({
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
+        {geoJson?.features?.length ? (
+          <GeoJSON key="imported-geojson" data={geoJson} />
+        ) : null}
         {markers.map((marker, index) => (
-          <Marker key={index} position={marker.position}>
-            {(marker.title || marker.description) && (
+          <Marker key={marker.placeId ?? index} position={marker.position}>
+            {(marker.title || marker.description || marker.disclosureText) && (
               <Popup>
+                {marker.isSponsored && (
+                  <span className="inline-block text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded mb-1">
+                    Sponsored
+                  </span>
+                )}
                 {marker.title && (
                   <h3 className="font-semibold mb-1">{marker.title}</h3>
                 )}
                 {marker.description && (
                   <p className="text-sm">{marker.description}</p>
+                )}
+                {marker.disclosureText && (
+                  <p className="text-xs text-muted-foreground mt-1" role="region" aria-label="Why am I seeing this?">
+                    {marker.disclosureText}
+                  </p>
                 )}
               </Popup>
             )}
