@@ -30,13 +30,23 @@ export const authOptions: AuthOptions = {
 
         return {
           id: user.id,
-          email: user.email,
-          name: user.name,
+          email: user.email ?? null,
+          name: user.name ?? null,
         };
       },
     }),
   ],
   pages: {
     signIn: "/login",
+  },
+  callbacks: {
+    jwt({ token, user }) {
+      if (user?.id) token.id = user.id;
+      return token;
+    },
+    session({ session, token }) {
+      if (session.user) session.user.id = token.id as string;
+      return session;
+    },
   },
 };

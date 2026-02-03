@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "@/app/lib/utils";
@@ -295,8 +296,10 @@ function ProviderCard({
       </CardContent>
 
       <CardFooter className="gap-2" onClick={(e) => e.stopPropagation()}>
-        <Button variant="outline" size="default" className="flex-1">
-          View profile
+        <Button asChild variant="outline" size="default" className="flex-1">
+          <Link href={`/jonathan/profile/${encodeURIComponent(provider.slug)}`}>
+            View profile
+          </Link>
         </Button>
         <Button variant="default" size="default" className="flex-1">
           Contact

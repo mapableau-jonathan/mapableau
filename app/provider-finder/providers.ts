@@ -22,6 +22,8 @@ export type Provider = {
   website?: string;
   abn?: string;
   openingHours?: string;
+  /** Stable key for claim matching: ABN-slugify(Outletname)-slugify(Address) */
+  outletKey?: string;
 };
 
 export const PROVIDER_CATEGORIES = [

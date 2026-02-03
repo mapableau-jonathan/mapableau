@@ -15,12 +15,34 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  name      String?
-  email     String  @unique
-  passwordHash String
-  createdAt DateTime @default(now())
-  sessions  Session[]
+  id               String             @id @default(cuid())
+  name             String?
+  email            String             @unique
+  passwordHash     String
+  createdAt        DateTime           @default(now())
+  sessions         Session[]
+  claimedProviders ClaimedProvider[]
+}
+
+model ClaimedProvider {
+  id           String    @id @default(cuid())
+  slug         String    @unique
+  outletKey    String?   @unique
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  phone        String?
+  email        String?
+  website      String?
+  description  String?
+  openingHours String?
+  suburb       String?
+  state        String?
+  postcode     String?
+  categories   String[]
+  verifiedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }
 
 // todo: remove because we're using JWT
