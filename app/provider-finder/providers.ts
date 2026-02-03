@@ -16,6 +16,12 @@ export type Provider = {
   /** From outlet data; used by Map when present */
   latitude?: number;
   longitude?: number;
+  /** From outlet data; shown on card */
+  phone?: string;
+  email?: string;
+  website?: string;
+  abn?: string;
+  openingHours?: string;
 };
 
 export const PROVIDER_CATEGORIES = [

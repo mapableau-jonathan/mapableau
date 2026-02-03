@@ -11,13 +11,43 @@ function slugify(s: string): string {
     .replace(/[^a-z0-9-]/g, "");
 }
 
-/** Parse "Suburb State Postcode" or "Suburb State 1234" into suburb, state, postcode */
-function parseHeadOffice(headOffice: string): {
-  suburb: string;
-  state: string;
-  postcode: string;
-} {
-  const parts = headOffice.trim().split(/\s+/);
+type LocationParsed = { suburb: string; state: string; postcode: string };
+
+/** Parse Address "..., Suburb, STATE Postcode" or fallback to "Suburb State Postcode" (Head_Office) */
+function parseAddress(address: string): LocationParsed | null {
+  const raw = address.trim();
+  if (!raw || raw.toUpperCase() === "CONFIDENTIAL") return null;
+  const parts = raw
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length >= 2) {
+    const last = parts[parts.length - 1] ?? "";
+    const lastParts = last.split(/\s+/).filter(Boolean);
+    const postcode = lastParts[lastParts.length - 1] ?? "";
+    const state = lastParts[lastParts.length - 2] ?? "";
+    const suburb = parts[parts.length - 2] ?? "";
+    return { suburb, state, postcode };
+  }
+  if (parts.length === 1) {
+    const tokens = parts[0].split(/\s+/).filter(Boolean);
+    if (tokens.length >= 3) {
+      const postcode = tokens[tokens.length - 1] ?? "";
+      const state = tokens[tokens.length - 2] ?? "";
+      const suburb = tokens.slice(0, -2).join(" ");
+      return { suburb, state, postcode };
+    }
+    if (tokens.length === 2) {
+      return { suburb: tokens[0] ?? "", state: tokens[1] ?? "", postcode: "" };
+    }
+    return { suburb: parts[0], state: "", postcode: "" };
+  }
+  return null;
+}
+
+/** Parse "Suburb State Postcode" (e.g. Head_Office) into suburb, state, postcode */
+function parseHeadOffice(headOffice: string): LocationParsed {
+  const parts = headOffice.trim().split(/\s+/).filter(Boolean);
   if (parts.length >= 3) {
     const postcode = parts[parts.length - 1] ?? "";
     const state = parts[parts.length - 2] ?? "";
@@ -25,21 +55,18 @@ function parseHeadOffice(headOffice: string): {
     return { suburb, state, postcode };
   }
   if (parts.length === 2) {
-    return {
-      suburb: parts[0] ?? "",
-      state: parts[1] ?? "",
-      postcode: "",
-    };
+    return { suburb: parts[0] ?? "", state: parts[1] ?? "", postcode: "" };
   }
   return { suburb: headOffice, state: "", postcode: "" };
 }
 
 export function mapOutletToProvider(
   o: ProviderOutlet,
-  index: number
+  index: number,
 ): Provider {
-  const { suburb, postcode } = parseHeadOffice(o.Head_Office);
-  const name = (o.Outletname?.trim() || o.Prov_N?.trim() || "Unknown").trim();
+  const parsed = parseAddress(o.Address) ?? parseHeadOffice(o.Head_Office);
+  const { suburb, postcode } = parsed;
+  const name = (o.Prov_N?.trim() || o.Outletname?.trim() || "Unknown").trim();
   const categories = regGroupIndicesToCategories(o.RegGroup);
   const prfsnCategories = o.prfsn
     .split("|")
@@ -52,15 +79,14 @@ export function mapOutletToProvider(
         ? prfsnCategories
         : [];
   const id =
-    `${o.ABN}-${index}-${slugify(name).slice(0, 30)}` ||
-    `outlet-${index}`;
+    `${o.ABN}-${index}-${slugify(name).slice(0, 30)}` || `outlet-${index}`;
 
   return {
     id,
     slug: slugify(name) || id,
     name,
     suburb: suburb || "—",
-    state: o.State_cd,
+    state: (parsed.state || o.State_cd) as Provider["state"],
     postcode: postcode || String(o.Post_cd),
     distanceKm: 0,
     rating: 0,
@@ -70,6 +96,11 @@ export function mapOutletToProvider(
     supports: ["In-person"],
     latitude: o.Latitude !== 0 ? o.Latitude : undefined,
     longitude: o.Longitude !== 0 ? o.Longitude : undefined,
+    phone: o.Phone?.trim() || undefined,
+    email: o.Email?.trim() || undefined,
+    website: o.Website?.trim() || undefined,
+    abn: o.ABN?.trim() || undefined,
+    openingHours: o.opnhrs?.trim() || undefined,
   };
 }
 

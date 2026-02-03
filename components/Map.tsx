@@ -1,13 +1,34 @@
 "use client";
 
-import type { LatLngExpression } from "leaflet";
-import { latLngBounds } from "leaflet";
+import L, { type LatLngExpression, latLngBounds } from "leaflet";
 import { useEffect } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
 import type { Provider } from "@/app/provider-finder/providers";
 import "@/lib/leafletIcons";
+
+// Use divIcons for all markers so we never rely on L.Icon.Default (avoids createIcon undefined in some envs)
+const defaultMarkerIcon = L.divIcon({
+  className: "default-marker-icon",
+  html: `<div style="width:22px;height:22px;background:#2563eb;border:2px solid white;border-radius:50%;box-shadow:0 2px 4px rgba(0,0,0,0.3)"></div>`,
+  iconSize: [22, 22],
+  iconAnchor: [11, 11],
+});
+
+const redMarkerIcon = L.divIcon({
+  className: "red-marker-icon",
+  html: `<div style="width:24px;height:24px;background:#dc2626;border:3px solid white;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.35)"></div>`,
+  iconSize: [24, 24],
+  iconAnchor: [12, 12],
+});
+
+const userPositionIcon = L.divIcon({
+  className: "user-marker-icon",
+  html: `<div style="width:20px;height:20px;background:#16a34a;border:2px solid white;border-radius:50%;box-shadow:0 2px 4px rgba(0,0,0,0.3)"></div>`,
+  iconSize: [20, 20],
+  iconAnchor: [10, 10],
+});
 
 // Approximate coordinates for Australian locations
 // In production, you'd use a geocoding service
@@ -38,6 +59,8 @@ type MapProps = {
   providers?: Provider[];
   /** When set, show user position and fit bounds to include it */
   userPosition?: { lat: number; lng: number } | null;
+  /** When set, fly map to this provider's position (uses lat/lng or geocode lookup) */
+  centerOnProvider?: Provider | null;
 };
 
 // Default center: Sydney, Australia
@@ -77,9 +100,43 @@ function FitBounds({
   return null;
 }
 
+const CENTER_ZOOM = 14;
+
+function getCoords(provider: Provider): [number, number] | null {
+  if (
+    provider.latitude != null &&
+    provider.longitude != null &&
+    (provider.latitude !== 0 || provider.longitude !== 0)
+  ) {
+    return [provider.latitude, provider.longitude];
+  }
+  const coords = getProviderCoords(provider.suburb, provider.state);
+  if (!coords) return null;
+  return coords as [number, number];
+}
+
+// Fly map to a provider when centerOnProvider changes
+function FlyToProvider({
+  centerOnProvider,
+}: {
+  centerOnProvider: Provider | null | undefined;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!centerOnProvider) return;
+    const coords = getCoords(centerOnProvider);
+    if (!coords) return;
+    map.flyTo(coords, CENTER_ZOOM, { duration: 0.5 });
+  }, [map, centerOnProvider]);
+
+  return null;
+}
+
 export default function Map({
   providers = [],
   userPosition = null,
+  centerOnProvider = null,
 }: MapProps) {
   const markers = providers
     .map((provider) => {
@@ -112,13 +169,20 @@ export default function Map({
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       <FitBounds markers={markers} userPosition={userPosition ?? null} />
+      <FlyToProvider centerOnProvider={centerOnProvider ?? null} />
       {userPosition ? (
-        <Marker position={[userPosition.lat, userPosition.lng]}>
+        <Marker position={[userPosition.lat, userPosition.lng]} icon={userPositionIcon}>
           <Popup>You are here</Popup>
         </Marker>
       ) : null}
       {markers.map(({ provider, coords }) => (
-        <Marker key={provider.id} position={coords}>
+        <Marker
+          key={provider.id}
+          position={coords}
+          icon={
+            centerOnProvider?.id === provider.id ? redMarkerIcon : defaultMarkerIcon
+          }
+        >
           <Popup>
             <div className="min-w-[200px]">
               <h3 className="font-semibold text-sm mb-1">{provider.name}</h3>

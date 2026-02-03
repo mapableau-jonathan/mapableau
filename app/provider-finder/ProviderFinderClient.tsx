@@ -2,10 +2,14 @@
 
 import {
   ChevronDown,
+  Clock,
+  Globe,
   LayoutGrid,
   List,
   Loader2,
+  Mail,
   MapPin,
+  Phone,
   Search,
   ShieldCheck,
   SlidersHorizontal,
@@ -13,7 +17,7 @@ import {
   X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "@/app/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -87,15 +91,39 @@ function scoreRelevance(provider: Provider, queryRaw: string) {
 function ProviderCard({
   provider,
   view,
+  onSelect,
+  isSelected,
 }: {
   provider: Provider;
   view: ViewMode;
+  onSelect?: (provider: Provider) => void;
+  isSelected?: boolean;
 }) {
   const rating = clampRating(provider.rating);
   const showDistance = provider.distanceKm > 0 && provider.suburb !== "Remote";
 
   return (
-    <Card variant={view === "grid" ? "interactive" : "outlined"}>
+    <Card
+      variant={view === "grid" ? "interactive" : "outlined"}
+      role={onSelect ? "button" : undefined}
+      tabIndex={onSelect ? 0 : undefined}
+      onClick={onSelect ? () => onSelect(provider) : undefined}
+      onKeyDown={
+        onSelect
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelect(provider);
+              }
+            }
+          : undefined
+      }
+      className={cn(
+        onSelect && "cursor-pointer",
+        isSelected &&
+          "shadow-lg shadow-primary/10 -translate-y-1 border-primary/20 ring-2 ring-primary/20 ring-offset-2 ring-offset-background",
+      )}
+    >
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -174,9 +202,99 @@ function ProviderCard({
             ))}
           </span>
         </div>
+
+        {(provider.phone ||
+          provider.email ||
+          provider.website ||
+          provider.abn ||
+          provider.openingHours) ? (
+          <div className="space-y-2 border-t border-border/70 pt-3 text-xs text-muted-foreground">
+            {provider.phone ? (
+              <div className="flex items-start gap-2">
+                <Phone className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                <a
+                  href={`tel:${provider.phone.replace(/\s/g, "")}`}
+                  className="text-primary hover:underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {provider.phone}
+                </a>
+              </div>
+            ) : null}
+            {provider.email ? (
+              <div className="flex items-start gap-2">
+                <Mail className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                <a
+                  href={`mailto:${provider.email}`}
+                  className="text-primary hover:underline break-all"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {provider.email}
+                </a>
+              </div>
+            ) : null}
+            {provider.website ? (
+              <div className="flex items-start gap-2">
+                <Globe className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                <a
+                  href={
+                    provider.website.startsWith("http")
+                      ? provider.website
+                      : `https://${provider.website}`
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline break-all"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {provider.website}
+                </a>
+              </div>
+            ) : null}
+            {provider.abn ? (
+              <div className="flex items-start gap-2">
+                <span className="font-medium text-foreground shrink-0">
+                  ABN:
+                </span>
+                <span>{provider.abn}</span>
+              </div>
+            ) : null}
+            {provider.openingHours ? (
+              <div className="flex items-start gap-2">
+                <Clock className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                <div className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-0.5 text-sm font-medium tabular-nums">
+                  {provider.openingHours
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean)
+                    .map((segment) => {
+                      const colonIdx = segment.indexOf(": ");
+                      const day =
+                        colonIdx >= 0
+                          ? segment.slice(0, colonIdx)
+                          : segment;
+                      const hours =
+                        colonIdx >= 0
+                          ? segment.slice(colonIdx + 2)
+                          : "";
+                      return { day, hours };
+                    })
+                    .map(({ day, hours }) => (
+                      <Fragment key={day}>
+                        <span className="text-muted-foreground">
+                          {day}
+                        </span>
+                        <span>{hours || "—"}</span>
+                      </Fragment>
+                    ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </CardContent>
 
-      <CardFooter className="gap-2">
+      <CardFooter className="gap-2" onClick={(e) => e.stopPropagation()}>
         <Button variant="outline" size="default" className="flex-1">
           View profile
         </Button>
@@ -214,6 +332,9 @@ export default function ProviderFinderClient() {
   const [userLocation, setUserLocation] = useState<UserPosition | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [selectedProvider, setSelectedProvider] = useState<Provider | null>(
+    null,
+  );
   const searchInputRef = useRef<HTMLInputElement>(null);
   const autocompleteRef = useRef<HTMLDivElement>(null);
 
@@ -880,7 +1001,11 @@ export default function ProviderFinderClient() {
               </Button>
             </Card>
           ) : null}
-          <Map providers={mapProviders} userPosition={userLocation} />
+          <Map
+            providers={mapProviders}
+            userPosition={userLocation}
+            centerOnProvider={selectedProvider}
+          />
         </section>
 
         <section className="container mx-auto mt-8 px-4">
@@ -914,7 +1039,13 @@ export default function ProviderFinderClient() {
                   )}
                 >
                   {visible.map((p) => (
-                    <ProviderCard key={p.id} provider={p} view={view} />
+                    <ProviderCard
+                      key={p.id}
+                      provider={p}
+                      view={view}
+                      onSelect={(provider) => setSelectedProvider(provider)}
+                      isSelected={selectedProvider?.id === p.id}
+                    />
                   ))}
                 </div>
 
