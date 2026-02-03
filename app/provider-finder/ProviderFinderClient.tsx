@@ -4,6 +4,7 @@ import {
   ChevronDown,
   LayoutGrid,
   List,
+  Loader2,
   MapPin,
   Search,
   ShieldCheck,
@@ -24,8 +25,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  distanceKm,
+  getLocationAndPostcode,
+  type UserPosition,
+} from "@/lib/geo";
+import { useProviderOutlets } from "@/lib/use-provider-outlets";
 
-import { PROVIDER_CATEGORIES, PROVIDERS, type Provider } from "./providers";
+import { mapOutletsToProviders } from "./outletToProvider";
+import { type Provider } from "./providers";
 
 // todo: what does this do?
 // "5️⃣ Dynamically import the map (avoid SSR crash)"
@@ -35,6 +43,9 @@ const Map = dynamic(() => import("@/components/Map"), {
 
 type ViewMode = "grid" | "list";
 type SortMode = "relevance" | "distance" | "rating";
+
+const RADIUS_KM = 50;
+const MAP_PIN_LIMIT = 500;
 
 function formatLocation(provider: Provider) {
   if (provider.suburb === "Remote") return "Telehealth (Australia-wide)";
@@ -178,6 +189,17 @@ function ProviderCard({
 }
 
 export default function ProviderFinderClient() {
+  const { data: outlets, isLoading, isError, error } = useProviderOutlets();
+  const providers = useMemo(
+    () => (outlets ? mapOutletsToProviders(outlets) : []),
+    [outlets],
+  );
+  const providerCategories = useMemo(() => {
+    const set = new Set<string>();
+    providers.forEach((p) => p.categories.forEach((c) => set.add(c)));
+    return Array.from(set).sort();
+  }, [providers]);
+
   const [query, setQuery] = useState("");
   const [location, setLocation] = useState("");
   const [category, setCategory] = useState<string>("all");
@@ -189,17 +211,37 @@ export default function ProviderFinderClient() {
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [showAutocomplete, setShowAutocomplete] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [userLocation, setUserLocation] = useState<UserPosition | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const autocompleteRef = useRef<HTMLDivElement>(null);
 
   const pageSize = 9;
+
+  const useMyLocation = async () => {
+    setLocationLoading(true);
+    setLocationError(null);
+    try {
+      const { position, postcode } = await getLocationAndPostcode();
+      setUserLocation(position);
+      setLocation(postcode);
+      setPage(1);
+    } catch (e) {
+      setLocationError(
+        e instanceof Error ? e.message : "Could not get your location",
+      );
+    } finally {
+      setLocationLoading(false);
+    }
+  };
 
   const filteredSorted = useMemo(() => {
     const q = query.trim().toLowerCase();
     const loc = location.trim().toLowerCase();
     const cat = category;
 
-    const filtered = PROVIDERS.filter((p) => {
+    const filtered = providers.filter((p) => {
       if (registeredOnly && !p.registered) return false;
       if (telehealthOnly && !p.supports.includes("Telehealth")) return false;
       if (cat !== "all" && !p.categories.includes(cat)) return false;
@@ -240,7 +282,15 @@ export default function ProviderFinderClient() {
     });
 
     return sorted;
-  }, [category, location, query, registeredOnly, sort, telehealthOnly]);
+  }, [
+    category,
+    location,
+    providers,
+    query,
+    registeredOnly,
+    sort,
+    telehealthOnly,
+  ]);
 
   const total = filteredSorted.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -250,6 +300,24 @@ export default function ProviderFinderClient() {
     const start = (currentPage - 1) * pageSize;
     return filteredSorted.slice(start, start + pageSize);
   }, [currentPage, filteredSorted]);
+
+  const mapProviders = useMemo(() => {
+    let list = filteredSorted;
+    if (userLocation) {
+      list = list.filter((p) => {
+        if (p.latitude == null || p.longitude == null) return false;
+        const d = distanceKm(
+          userLocation.lat,
+          userLocation.lng,
+          p.latitude,
+          p.longitude,
+        );
+        return d <= RADIUS_KM;
+      });
+    }
+    // todo: if no location then set to city and use radius around that? or require post code to be entered?
+    return list.slice(0, MAP_PIN_LIMIT);
+  }, [filteredSorted, userLocation]);
 
   // Clamp page when filters/sort reduce total pages.
   useEffect(() => {
@@ -269,8 +337,9 @@ export default function ProviderFinderClient() {
     }> = [];
 
     // Provider name suggestions
-    PROVIDERS.filter((p) => p.name.toLowerCase().includes(q)).forEach(
-      (provider) => {
+    providers
+      .filter((p) => p.name.toLowerCase().includes(q))
+      .forEach((provider) => {
         suggestions.push({
           type: "provider",
           label: provider.name,
@@ -281,12 +350,12 @@ export default function ProviderFinderClient() {
             setPage(1);
           },
         });
-      },
-    );
+      });
 
     // Category suggestions
-    PROVIDER_CATEGORIES.filter((cat) => cat.toLowerCase().includes(q)).forEach(
-      (cat) => {
+    providerCategories
+      .filter((cat) => cat.toLowerCase().includes(q))
+      .forEach((cat) => {
         suggestions.push({
           type: "category",
           label: cat,
@@ -298,12 +367,11 @@ export default function ProviderFinderClient() {
             setPage(1);
           },
         });
-      },
-    );
+      });
 
     // Location suggestions (unique suburbs and states)
     const locations = new Set<string>();
-    PROVIDERS.forEach((p) => {
+    providers.forEach((p) => {
       if (p.suburb.toLowerCase().includes(q) && p.suburb !== "Remote") {
         locations.add(`${p.suburb}, ${p.state}`);
       }
@@ -326,7 +394,7 @@ export default function ProviderFinderClient() {
     });
 
     return suggestions.slice(0, 8); // Limit to 8 suggestions
-  }, [query]);
+  }, [providerCategories, providers, query]);
 
   // Handle keyboard navigation
   useEffect(() => {
@@ -388,6 +456,29 @@ export default function ProviderFinderClient() {
     registeredOnly ||
     telehealthOnly ||
     sort !== "relevance";
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center py-12">
+        <Card variant="outlined" className="p-8 text-center max-w-md">
+          <p className="text-muted-foreground">Loading providers…</p>
+        </Card>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center py-12">
+        <Card variant="outlined" className="p-8 text-center max-w-md">
+          <h2 className="text-lg font-semibold">Could not load providers</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {error instanceof Error ? error.message : "Something went wrong."}
+          </p>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -502,25 +593,7 @@ export default function ProviderFinderClient() {
               <span className="text-xs font-medium text-muted-foreground">
                 Quick filters:
               </span>
-              {[
-                {
-                  label: "Therapeutic Supports",
-                  category: "Therapeutic Supports",
-                },
-                {
-                  label: "Assistance with Daily Life",
-                  category: "Assistance with Daily Life",
-                },
-                {
-                  label: "Support Coordination",
-                  category: "Support Coordination",
-                },
-                { label: "Transport", category: "Transport" },
-                {
-                  label: "Community Participation",
-                  category: "Community Participation",
-                },
-              ].map(({ label, category: cat }) => (
+              {providerCategories.slice(0, 5).map((cat) => (
                 <Button
                   key={cat}
                   variant={category === cat ? "default" : "outline"}
@@ -536,7 +609,7 @@ export default function ProviderFinderClient() {
                       "border-primary/30 bg-primary/5 text-primary hover:bg-primary/10",
                   )}
                 >
-                  {label}
+                  {cat}
                 </Button>
               ))}
             </div>
@@ -653,16 +726,41 @@ export default function ProviderFinderClient() {
                       >
                         Location
                       </label>
-                      <input
-                        id="provider-finder-location"
-                        value={location}
-                        onChange={(e) => {
-                          setLocation(e.target.value);
-                          setPage(1);
-                        }}
-                        placeholder="Suburb or postcode"
-                        className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-primary/30 focus:ring-2 focus:ring-ring"
-                      />
+                      <div className="mt-1 flex gap-2">
+                        <input
+                          id="provider-finder-location"
+                          value={location}
+                          onChange={(e) => {
+                            setLocation(e.target.value);
+                            setPage(1);
+                          }}
+                          placeholder="Suburb or postcode"
+                          className="flex-1 rounded-lg border border-input bg-background px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-primary/30 focus:ring-2 focus:ring-ring"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="default"
+                          onClick={useMyLocation}
+                          disabled={locationLoading}
+                          className="shrink-0 gap-1.5 px-3"
+                          title="Use my location to set postcode and show nearby providers"
+                        >
+                          {locationLoading ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <MapPin className="h-4 w-4" />
+                          )}
+                          <span className="hidden sm:inline">
+                            Use my location
+                          </span>
+                        </Button>
+                      </div>
+                      {locationError ? (
+                        <p className="mt-1 text-xs text-destructive">
+                          {locationError}
+                        </p>
+                      ) : null}
                     </div>
 
                     <div className="md:col-span-2">
@@ -682,7 +780,7 @@ export default function ProviderFinderClient() {
                         className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-primary/30 focus:ring-2 focus:ring-ring"
                       >
                         <option value="all">All</option>
-                        {PROVIDER_CATEGORIES.map((c) => (
+                        {providerCategories.map((c) => (
                           <option key={c} value={c}>
                             {c}
                           </option>
@@ -758,8 +856,31 @@ export default function ProviderFinderClient() {
         </section>
 
         <section className="container mx-auto mt-8 px-4">
-          {/* todo: make maps instead take marker params rather than it working this out */}
-          <Map providers={filteredSorted} />
+          {!userLocation && filteredSorted.length > MAP_PIN_LIMIT ? (
+            <Card variant="outlined" className="mb-4 p-4">
+              <p className="text-sm text-muted-foreground">
+                Set a location (or use &quot;Use my location&quot;) to see
+                providers on the map. Showing all results would add too many
+                pins.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-3 gap-1.5"
+                onClick={useMyLocation}
+                disabled={locationLoading}
+              >
+                {locationLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <MapPin className="h-4 w-4" />
+                )}
+                Use my location
+              </Button>
+            </Card>
+          ) : null}
+          <Map providers={mapProviders} userPosition={userLocation} />
         </section>
 
         <section className="container mx-auto mt-8 px-4">

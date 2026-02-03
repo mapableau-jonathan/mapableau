@@ -36,6 +36,8 @@ function getProviderCoords(
 
 type MapProps = {
   providers?: Provider[];
+  /** When set, show user position and fit bounds to include it */
+  userPosition?: { lat: number; lng: number } | null;
 };
 
 // Default center: Sydney, Australia
@@ -45,43 +47,48 @@ const initialZoom = 6;
 // Component to adjust map bounds when markers change
 function FitBounds({
   markers,
+  userPosition,
 }: {
   markers: { provider: Provider; coords: LatLngExpression }[];
+  userPosition: { lat: number; lng: number } | null;
 }) {
   const map = useMap();
 
   useEffect(() => {
-    if (markers.length === 0) {
-      // If no markers, reset to default view
+    const points: [number, number][] = markers.map((m) => m.coords as [number, number]);
+    if (userPosition) {
+      points.push([userPosition.lat, userPosition.lng]);
+    }
+    if (points.length === 0) {
       map.setView(initialCenter, initialZoom);
       return;
     }
-
-    if (markers.length === 1) {
-      // If only one marker, center on it with a reasonable zoom
-      map.setView(markers[0].coords, 13);
+    if (points.length === 1) {
+      map.setView(points[0], 13);
       return;
     }
-
-    // Calculate bounds for all markers
-    const bounds = latLngBounds(
-      markers.map((m) => m.coords as [number, number]),
-    );
-
-    // Fit bounds with padding
+    const bounds = latLngBounds(points);
     map.fitBounds(bounds, {
-      padding: [50, 50], // Add padding so markers aren't at the edge
-      maxZoom: 15, // Don't zoom in too much
+      padding: [50, 50],
+      maxZoom: 15,
     });
-  }, [map, markers]);
+  }, [map, markers, userPosition]);
 
   return null;
 }
 
-export default function Map({ providers = [] }: MapProps) {
+export default function Map({
+  providers = [],
+  userPosition = null,
+}: MapProps) {
   const markers = providers
     .map((provider) => {
-      const coords = getProviderCoords(provider.suburb, provider.state);
+      const coords =
+        provider.latitude != null &&
+        provider.longitude != null &&
+        (provider.latitude !== 0 || provider.longitude !== 0)
+          ? ([provider.latitude, provider.longitude] as LatLngExpression)
+          : getProviderCoords(provider.suburb, provider.state);
       if (!coords) return null;
       return { provider, coords };
     })
@@ -91,7 +98,11 @@ export default function Map({ providers = [] }: MapProps) {
 
   return (
     <MapContainer
-      center={initialCenter}
+      center={
+        userPosition
+          ? ([userPosition.lat, userPosition.lng] as LatLngExpression)
+          : initialCenter
+      }
       zoom={initialZoom}
       style={{ height: "500px", width: "100%" }}
       scrollWheelZoom={true}
@@ -100,7 +111,12 @@ export default function Map({ providers = [] }: MapProps) {
         attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      <FitBounds markers={markers} />
+      <FitBounds markers={markers} userPosition={userPosition ?? null} />
+      {userPosition ? (
+        <Marker position={[userPosition.lat, userPosition.lng]}>
+          <Popup>You are here</Popup>
+        </Marker>
+      ) : null}
       {markers.map(({ provider, coords }) => (
         <Marker key={provider.id} position={coords}>
           <Popup>

@@ -13,6 +13,9 @@ export type Provider = {
   registered: boolean;
   categories: string[];
   supports: ProviderSupportMode[];
+  /** From outlet data; used by Map when present */
+  latitude?: number;
+  longitude?: number;
 };
 
 export const PROVIDER_CATEGORIES = [
