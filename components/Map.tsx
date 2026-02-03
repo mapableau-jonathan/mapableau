@@ -1,7 +1,7 @@
 "use client";
 
 import L, { type LatLngExpression, latLngBounds } from "leaflet";
-import { useEffect } from "react";
+import { Fragment, useEffect } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -53,6 +53,19 @@ function getProviderCoords(
   if (suburb === "Remote") return null;
   const key = `${suburb} ${state}`;
   return locationToCoords[key] || null;
+}
+
+function parseOpeningHours(hours: string): { day: string; hours: string }[] {
+  return hours
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((segment) => {
+      const colonIdx = segment.indexOf(": ");
+      const day = colonIdx >= 0 ? segment.slice(0, colonIdx) : segment;
+      const time = colonIdx >= 0 ? segment.slice(colonIdx + 2) : "";
+      return { day, hours: time || "—" };
+    });
 }
 
 type MapProps = {
@@ -184,14 +197,14 @@ export default function Map({
           }
         >
           <Popup>
-            <div className="min-w-[200px]">
-              <h3 className="font-semibold text-sm mb-1">{provider.name}</h3>
-              <p className="text-xs text-muted-foreground mb-2">
+            <div className="min-w-[220px] max-w-[280px] text-xs leading-tight">
+              <h3 className="font-semibold text-sm mb-0.5">{provider.name}</h3>
+              <p className="text-muted-foreground mb-1">
                 {provider.suburb === "Remote"
                   ? "Telehealth (Australia-wide)"
                   : `${provider.suburb} ${provider.state} ${provider.postcode}`}
               </p>
-              <div className="flex items-center gap-2 text-xs mb-2">
+              <div className="flex items-center gap-1.5 mb-1">
                 <span className="font-medium">
                   ⭐ {provider.rating.toFixed(1)}
                 </span>
@@ -199,16 +212,65 @@ export default function Map({
                   ({provider.reviewCount} reviews)
                 </span>
               </div>
-              <div className="flex flex-wrap gap-1">
+              <div className="flex flex-wrap gap-1 mb-1">
                 {provider.categories.slice(0, 2).map((cat) => (
                   <span
                     key={cat}
-                    className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary"
+                    className="px-1.5 py-0.5 rounded bg-primary/10 text-primary"
                   >
                     {cat}
                   </span>
                 ))}
               </div>
+              {provider.phone ? (
+                <p className="mb-0.5">
+                  <span className="text-muted-foreground">Ph: </span>
+                  <a href={`tel:${provider.phone}`} className="text-primary hover:underline">
+                    {provider.phone}
+                  </a>
+                </p>
+              ) : null}
+              {provider.email ? (
+                <p className="mb-0.5 truncate">
+                  <span className="text-muted-foreground">Email: </span>
+                  <a href={`mailto:${provider.email}`} className="text-primary hover:underline truncate block" title={provider.email}>
+                    {provider.email}
+                  </a>
+                </p>
+              ) : null}
+              {provider.website ? (
+                <p className="mb-0.5 truncate">
+                  <span className="text-muted-foreground">Web: </span>
+                  <a
+                    href={provider.website.startsWith("http") ? provider.website : `https://${provider.website}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
+                    title={provider.website}
+                  >
+                    {provider.website}
+                  </a>
+                </p>
+              ) : null}
+              {provider.abn ? (
+                <p className="mb-1">
+                  <span className="text-muted-foreground">ABN: </span>
+                  {provider.abn}
+                </p>
+              ) : null}
+              {provider.openingHours ? (
+                <div className="mt-1 pt-1 border-t border-border">
+                  <p className="font-medium text-muted-foreground mb-0.5">Hours</p>
+                  <div className="grid grid-cols-[max-content_1fr] gap-x-2 gap-y-0.5 tabular-nums">
+                    {parseOpeningHours(provider.openingHours).map(({ day, hours }) => (
+                      <Fragment key={day}>
+                        <span className="text-muted-foreground">{day}</span>
+                        <span>{hours}</span>
+                      </Fragment>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
           </Popup>
         </Marker>

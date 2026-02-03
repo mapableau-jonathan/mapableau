@@ -203,11 +203,11 @@ function ProviderCard({
           </span>
         </div>
 
-        {(provider.phone ||
-          provider.email ||
-          provider.website ||
-          provider.abn ||
-          provider.openingHours) ? (
+        {provider.phone ||
+        provider.email ||
+        provider.website ||
+        provider.abn ||
+        provider.openingHours ? (
           <div className="space-y-2 border-t border-border/70 pt-3 text-xs text-muted-foreground">
             {provider.phone ? (
               <div className="flex items-start gap-2">
@@ -270,20 +270,14 @@ function ProviderCard({
                     .map((segment) => {
                       const colonIdx = segment.indexOf(": ");
                       const day =
-                        colonIdx >= 0
-                          ? segment.slice(0, colonIdx)
-                          : segment;
+                        colonIdx >= 0 ? segment.slice(0, colonIdx) : segment;
                       const hours =
-                        colonIdx >= 0
-                          ? segment.slice(colonIdx + 2)
-                          : "";
+                        colonIdx >= 0 ? segment.slice(colonIdx + 2) : "";
                       return { day, hours };
                     })
                     .map(({ day, hours }) => (
                       <Fragment key={day}>
-                        <span className="text-muted-foreground">
-                          {day}
-                        </span>
+                        <span className="text-muted-foreground">{day}</span>
                         <span>{hours || "—"}</span>
                       </Fragment>
                     ))}
@@ -703,122 +697,113 @@ export default function ProviderFinderClient() {
                   </div>
                 </div>
               </CardHeader>
-            </Card>
-          </div>
-        </section>
 
-        {/* Quick filter buttons */}
-        <section className="container mx-auto mt-8 px-4">
-          <div className="mx-auto max-w-6xl">
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              <span className="text-xs font-medium text-muted-foreground">
-                Quick filters:
-              </span>
-              {providerCategories.slice(0, 5).map((cat) => (
-                <Button
-                  key={cat}
-                  variant={category === cat ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => {
-                    setCategory(category === cat ? "all" : cat);
-                    setPage(1);
-                  }}
-                  type="button"
-                  className={cn(
-                    "h-8 text-xs",
-                    category === cat &&
-                      "border-primary/30 bg-primary/5 text-primary hover:bg-primary/10",
-                  )}
-                >
-                  {cat}
-                </Button>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="container mx-auto mt-8 px-4">
-          <div className="mx-auto max-w-6xl">
-            <Card variant="gradient">
-              <CardHeader
-                className="pb-4 cursor-pointer"
-                onClick={() => setFiltersExpanded(!filtersExpanded)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    setFiltersExpanded(!filtersExpanded);
-                  }
-                }}
-                role="button"
-                tabIndex={0}
-                aria-expanded={filtersExpanded}
-              >
-                <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <SlidersHorizontal className="h-4 w-4" />
-                    Filters
-                    <ChevronDown
-                      className={cn(
-                        "h-4 w-4 transition-transform",
-                        filtersExpanded && "rotate-180",
-                      )}
-                    />
-                  </div>
-
-                  <div
-                    className="flex items-center gap-2"
-                    onClick={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => e.stopPropagation()}
-                    role="none"
-                  >
+              <CardContent className="min-w-0 space-y-4 pt-0">
+                {/* Quick filters */}
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                    Quick filters:
+                  </span>
+                  {providerCategories.slice(0, 5).map((cat) => (
                     <Button
-                      variant="outline"
+                      key={cat}
+                      variant={category === cat ? "default" : "outline"}
                       size="sm"
+                      onClick={() => {
+                        setCategory(category === cat ? "all" : cat);
+                        setPage(1);
+                      }}
+                      type="button"
                       className={cn(
-                        "gap-2",
-                        view === "grid" &&
-                          "border-primary/30 bg-primary/5 text-primary",
+                        "h-8 text-xs",
+                        category === cat &&
+                          "border-primary/30 bg-primary/5 text-primary hover:bg-primary/10",
                       )}
-                      onClick={() => setView("grid")}
-                      type="button"
                     >
-                      <LayoutGrid className="h-4 w-4" />
-                      Grid
+                      {cat}
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className={cn(
-                        "gap-2",
-                        view === "list" &&
-                          "border-primary/30 bg-primary/5 text-primary",
-                      )}
-                      onClick={() => setView("list")}
-                      type="button"
-                    >
-                      <List className="h-4 w-4" />
-                      List
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={clearFilters}
-                      type="button"
-                      disabled={!hasActiveFilters}
-                      className="gap-2"
-                    >
-                      <X className="h-4 w-4" />
-                      Clear
-                    </Button>
-                  </div>
+                  ))}
                 </div>
-              </CardHeader>
 
-              {filtersExpanded && (
-                <CardContent className="space-y-4">
-                  <div className="grid gap-3 md:grid-cols-12">
-                    <div className="md:col-span-5">
+                {/* Collapsible filters */}
+                <div className="border-t border-border pt-4">
+                  <div
+                    className="flex min-w-0 cursor-pointer flex-col flex-wrap gap-4 pb-4 md:flex-row md:items-end md:justify-between"
+                    onClick={() => setFiltersExpanded(!filtersExpanded)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setFiltersExpanded(!filtersExpanded);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={filtersExpanded}
+                  >
+                    <div className="flex shrink-0 items-center gap-2 text-sm text-muted-foreground">
+                      <SlidersHorizontal className="h-4 w-4" />
+                      Filters
+                      <ChevronDown
+                        className={cn(
+                          "h-4 w-4 transition-transform",
+                          filtersExpanded && "rotate-180",
+                        )}
+                      />
+                    </div>
+
+                    <div
+                      className="flex min-w-0 flex-wrap items-center gap-2"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      role="none"
+                    >
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={cn(
+                          "gap-2",
+                          view === "grid" &&
+                            "border-primary/30 bg-primary/5 text-primary",
+                        )}
+                        onClick={() => setView("grid")}
+                        type="button"
+                      >
+                        <LayoutGrid className="h-4 w-4" />
+                        Grid
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={cn(
+                          "gap-2",
+                          view === "list" &&
+                            "border-primary/30 bg-primary/5 text-primary",
+                        )}
+                        onClick={() => setView("list")}
+                        type="button"
+                      >
+                        <List className="h-4 w-4" />
+                        List
+                      </Button>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={clearFilters}
+                        type="button"
+                        disabled={!hasActiveFilters}
+                        className="gap-2"
+                      >
+                        <X className="h-4 w-4" />
+                        Clear
+                      </Button>
+                    </div>
+                  </div>
+
+                  {filtersExpanded && (
+                    <div className="min-w-0 space-y-4">
+                  <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-12">
+                    <div className="min-w-0 sm:col-span-2 lg:col-span-4">
                       <label
                         htmlFor="provider-finder-search"
                         className="text-xs font-medium text-muted-foreground"
@@ -835,19 +820,19 @@ export default function ProviderFinderClient() {
                             setPage(1);
                           }}
                           placeholder="Provider name or service (e.g. therapy, transport)"
-                          className="w-full rounded-lg border border-input bg-background px-9 py-2.5 text-sm shadow-sm outline-none transition focus:border-primary/30 focus:ring-2 focus:ring-ring"
+                          className="min-w-0 w-full rounded-lg border border-input bg-background px-9 py-2.5 text-sm shadow-sm outline-none transition focus:border-primary/30 focus:ring-2 focus:ring-ring"
                         />
                       </div>
                     </div>
 
-                    <div className="md:col-span-3">
+                    <div className="min-w-0 sm:col-span-2 lg:col-span-4">
                       <label
                         htmlFor="provider-finder-location"
                         className="text-xs font-medium text-muted-foreground"
                       >
                         Location
                       </label>
-                      <div className="mt-1 flex gap-2">
+                      <div className="mt-1 flex min-w-0 gap-2">
                         <input
                           id="provider-finder-location"
                           value={location}
@@ -856,7 +841,7 @@ export default function ProviderFinderClient() {
                             setPage(1);
                           }}
                           placeholder="Suburb or postcode"
-                          className="flex-1 rounded-lg border border-input bg-background px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-primary/30 focus:ring-2 focus:ring-ring"
+                          className="min-w-0 flex-1 rounded-lg border border-input bg-background px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-primary/30 focus:ring-2 focus:ring-ring"
                         />
                         <Button
                           type="button"
@@ -884,7 +869,7 @@ export default function ProviderFinderClient() {
                       ) : null}
                     </div>
 
-                    <div className="md:col-span-2">
+                    <div className="min-w-0 lg:col-span-2">
                       <label
                         htmlFor="provider-finder-category"
                         className="text-xs font-medium text-muted-foreground"
@@ -898,7 +883,7 @@ export default function ProviderFinderClient() {
                           setCategory(e.target.value);
                           setPage(1);
                         }}
-                        className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-primary/30 focus:ring-2 focus:ring-ring"
+                        className="mt-1 min-w-0 w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-primary/30 focus:ring-2 focus:ring-ring"
                       >
                         <option value="all">All</option>
                         {providerCategories.map((c) => (
@@ -909,7 +894,7 @@ export default function ProviderFinderClient() {
                       </select>
                     </div>
 
-                    <div className="md:col-span-2">
+                    <div className="min-w-0 lg:col-span-2">
                       <label
                         htmlFor="provider-finder-sort"
                         className="text-xs font-medium text-muted-foreground"
@@ -970,8 +955,10 @@ export default function ProviderFinderClient() {
                       providers
                     </div>
                   </div>
-                </CardContent>
-              )}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
             </Card>
           </div>
         </section>
