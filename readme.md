@@ -6,7 +6,7 @@ A Next.js application built with TypeScript.
 
 - **Framework**: Next.js 15.5.4 (App Router)
 - **Language**: TypeScript
-- **Package Manager**: pnpm
+- **Package Manager**: npm
 - **Linting**: ESLint with TypeScript support
 - **Formatting**: Prettier
 - **Git Hooks**: Husky with lint-staged
@@ -16,52 +16,61 @@ A Next.js application built with TypeScript.
 ### Prerequisites
 
 - Node.js (v18 or higher)
-- pnpm (v10.12.1 or higher)
+- npm (included with Node.js)
 
 ### Installation
 
 ```bash
-pnpm install
+npm install
 ```
+
+If `npm` is not recognized (Node not in PATH), run from the project root:
+
+```powershell
+.\scripts\install.ps1
+.\scripts\dev.ps1
+```
+
+Or use the generic wrapper: `.\scripts\npm.ps1 install`, `.\scripts\npm.ps1 run dev`, etc.
 
 ### Development
 
 Run the development server:
 
 ```bash
-pnpm dev
+npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser to see the result.
+Open [http://localhost:3002](http://localhost:3002) in your browser to see the result.
 
 ### Build
 
 Build the application for production:
 
 ```bash
-pnpm build
+npm run build
 ```
 
 Start the production server:
 
 ```bash
-pnpm start
+npm start
 ```
 
 ## Scripts
 
-- `pnpm dev` - Start development server with Turbopack
-- `pnpm build` - Build for production (includes type-check and lint)
-- `pnpm start` - Start production server
-- `pnpm lint` - Run ESLint
-- `pnpm lint:fix` - Fix ESLint errors automatically
-- `pnpm type-check` - Run TypeScript type checking
-- `pnpm format` - Format code with Prettier
-- `pnpm format:check` - Check code formatting
+- `npm run dev` - Start development server with Turbopack (port 3002)
+- `npm run build` - Build for production (includes type-check and lint)
+- `npm start` - Start production server
+- `npm run lint` - Run ESLint
+- `npm run lint:fix` - Fix ESLint errors automatically
+- `npm run type-check` - Run TypeScript type checking
+- `npm run format` - Format code with Prettier
+- `npm run format:check` - Check code formatting
 
 ## Project Structure
 
-```
+```text
 ├── app/              # Next.js App Router pages and layouts
 ├── components/       # Reusable React components
 ├── lib/              # Utility functions and helpers
