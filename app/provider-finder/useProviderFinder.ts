@@ -3,7 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { Provider } from "@/app/provider-finder/providers";
+import { scoreRelevance } from "@/components/provider-finder";
+import type { AutocompleteSuggestion, SortMode, ViewMode } from "@/components/provider-finder";
 import {
   distanceKm,
   getLocationAndPostcode,
@@ -11,9 +12,7 @@ import {
 } from "@/lib/geo";
 import { buildPath } from "@/lib/router";
 import { useProviderOutlets } from "@/lib/use-provider-outlets";
-import type { AutocompleteSuggestion } from "@/components/provider-finder";
-import { scoreRelevance } from "@/components/provider-finder";
-import type { SortMode, ViewMode } from "@/components/provider-finder";
+
 
 import { mapOutletsToProviders } from "./outletToProvider";
 
@@ -237,7 +236,7 @@ export function useProviderFinder() {
         setSelectedIndex((prev) => (prev > 0 ? prev - 1 : -1));
       } else if (e.key === "Enter" && selectedIndex >= 0) {
         e.preventDefault();
-        autocompleteSuggestions[selectedIndex].action();
+        autocompleteSuggestions[selectedIndex].action?.();
       } else if (e.key === "Escape") {
         setShowAutocomplete(false);
         setSelectedIndex(-1);
@@ -300,7 +299,7 @@ export function useProviderFinder() {
     sort !== "relevance";
 
   const handleSuggestionSelect = (index: number) => {
-    autocompleteSuggestions[index]?.action();
+    autocompleteSuggestions[index]?.action?.();
   };
 
   const handleSearchChange = (value: string) => {
