@@ -4,10 +4,10 @@
 - **Output**: Next.js App Router; do not use `output: "standalone"` on Vercel (it can cause the site to display code instead of the rendered app).
 - **Images**: `next.config.ts` enables AVIF/WebP formats for Vercel Image Optimization.
 - **Caching**: Static data under `/public/data` gets `Cache-Control: public, max-age=43200, s-maxage=43200`.
-- **Headers**: `vercel.json` applies CORS headers to `/api/*` for production origin.
+- **Headers**: `vercel.json` applies CORS headers to `/api/*` for production origin **https://mapable.com.au**.
 - **Analytics/Logs**: Use Vercel dashboard for request logs, functions usage, and to manage env vars (`AUTH0_*`, `API_BEARER_TOKEN`, etc.).
 
-### Environment Variables
+## Environment Variables
 
 Configure in Vercel Project Settings → Environment Variables:
 
@@ -17,7 +17,9 @@ Configure in Vercel Project Settings → Environment Variables:
 - `DATABASE_URL`
 - `API_BEARER_TOKEN` (for Passport bearer-protected APIs)
 
-### Preview Tips
+## Preview Tips
+
 - Enable “Automatically expose System Environment Variables” so `NEXT_PUBLIC_*` envs are available in preview deployments.
-- Staging URL: **https://accessibooks2.vercel.app/**. Promote changes here before production.
+- **MapAble production**: <https://mapable.com.au>. Set `NEXTAUTH_URL=https://mapable.com.au` in Vercel env for production.
+- Staging URL: <https://accessibooks2.vercel.app/>. Promote changes here before production.
 - Use Vercel Preview URLs + staging for QA; Next.js builds with `reactStrictMode` to surface issues early.

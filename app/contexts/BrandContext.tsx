@@ -18,7 +18,15 @@ interface BrandContextType {
 
 const BrandContext = createContext<BrandContextType | undefined>(undefined);
 
-const STORAGE_KEY = "mapable-icon-style";
+export function useBrand(): BrandContextType {
+  const ctx = useContext(BrandContext);
+  if (ctx === undefined) {
+    throw new Error("useBrand must be used within BrandProvider");
+  }
+  return ctx;
+}
+
+const STORAGE_KEY = "accessibooks-icon-style";
 
 export function BrandProvider({ children }: { children: ReactNode }) {
   const [iconStyle, setIconStyleState] = useState<IconStyle>(() => {
@@ -45,24 +53,5 @@ export function BrandProvider({ children }: { children: ReactNode }) {
     <BrandContext.Provider value={{ iconStyle, setIconStyle, toggleIconStyle }}>
       {children}
     </BrandContext.Provider>
-  );
-}
-
-export function useBrand() {
-  const context = useContext(BrandContext);
-  if (!context) {
-    throw new Error("useBrand must be used within a BrandProvider");
-  }
-  return context;
-}
-
-export function useBrandSafe() {
-  const context = useContext(BrandContext);
-  return (
-    context ?? {
-      iconStyle: "organic" as IconStyle,
-      setIconStyle: () => {},
-      toggleIconStyle: () => {},
-    }
   );
 }

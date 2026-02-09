@@ -3,7 +3,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { Loader2 } from "lucide-react";
 import * as React from "react";
 
-import { cn } from "@/app/lib/utils";
+import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-semibold transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 touch-manipulation active:scale-[0.97] hover:-translate-y-0.5",
@@ -42,9 +42,6 @@ export interface ButtonProps
     VariantProps<typeof buttonVariants> {
   asChild?: boolean;
   loading?: boolean;
-  // todo: fix
-  variant: "default" | "secondary" | "destructive" | "outline";
-  size: "default" | "sm" | "lg" | "icon";
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
@@ -67,6 +64,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
         disabled={disabled || loading}
+        aria-busy={loading ? "true" : undefined}
         {...props}
       >
         {loading ? (

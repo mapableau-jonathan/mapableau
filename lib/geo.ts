@@ -3,6 +3,9 @@
  * Distance helper (haversine) for filtering providers by radius.
  */
 
+import { APP_NAME } from "@/lib/brand";
+import { parseResponseJson } from "@/lib/utils";
+
 export type UserPosition = { lat: number; lng: number };
 
 export type ReverseGeocodeResult = {
@@ -43,13 +46,13 @@ export async function reverseGeocode(
 
   const res = await fetch(url.toString(), {
     headers: {
-      "User-Agent": "MapableAU-ProviderFinder/1.0 (NDIS provider finder)",
+      "User-Agent": `${APP_NAME}-ProviderFinder/1.0 (provider finder)`,
     },
   });
   if (!res.ok) {
     throw new Error(`Geocoding failed: ${res.status}`);
   }
-  const data = (await res.json()) as {
+  const data = await parseResponseJson<{
     address?: {
       postcode?: string;
       suburb?: string;
@@ -59,8 +62,8 @@ export async function reverseGeocode(
       state?: string;
     };
     display_name?: string;
-  };
-  const addr = data.address ?? {};
+  }>(res);
+  const addr = data?.address ?? {};
   const postcode = addr.postcode ?? "";
   const suburb =
     addr.suburb ?? addr.village ?? addr.town ?? addr.state_district ?? "";
@@ -69,7 +72,7 @@ export async function reverseGeocode(
     postcode,
     suburb,
     state,
-    displayName: data.display_name ?? "",
+    displayName: data?.display_name ?? "",
   };
 }
 

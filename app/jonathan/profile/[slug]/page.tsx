@@ -11,7 +11,7 @@ import {
   Star,
 } from "lucide-react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import React, { useEffect, useState } from "react";
 
@@ -27,12 +27,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { formatPlace, PLACE_LABEL } from "@/lib/place";
+import { buildPath, useAppRouter } from "@/lib/router";
+import { parseResponseJson } from "@/lib/utils";
 import { useProviderOutlets } from "@/lib/use-provider-outlets";
-
-function formatLocation(provider: Provider) {
-  if (provider.suburb === "Remote") return "Telehealth (Australia-wide)";
-  return `${provider.suburb} ${provider.state} ${provider.postcode}`;
-}
 
 function clampRating(rating: number) {
   if (Number.isNaN(rating)) return 0;
@@ -56,7 +54,7 @@ function ProviderProfile({
     <div className="min-h-screen bg-background">
       <main className="container mx-auto max-w-3xl px-4 py-8">
         <Link
-          href="/provider-finder"
+          href={buildPath("providerFinder", {})}
           className="mb-6 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -70,10 +68,10 @@ function ProviderProfile({
                 <CardTitle className="text-2xl sm:text-3xl">
                   {provider.name}
                 </CardTitle>
-                <CardDescription className="mt-2 flex flex-wrap items-center gap-2 text-base">
+                <CardDescription className="mt-2 flex flex-wrap items-center gap-2 text-base" aria-label={PLACE_LABEL}>
                   <span className="inline-flex items-center gap-1.5">
-                    <MapPin className="h-4 w-4 shrink-0" />
-                    {formatLocation(provider)}
+                    <MapPin className="h-4 w-4 shrink-0" aria-hidden />
+                    {formatPlace(provider) ?? "—"}
                   </span>
                   {showDistance && (
                     <span className="rounded-md bg-accent px-2 py-0.5 text-xs text-foreground">
@@ -248,7 +246,7 @@ function ProviderProfile({
             )}
             {!isLoggedIn && provider.outletKey && (
               <Button asChild variant="secondary" size="default">
-                <Link href="/login">Sign in to claim</Link>
+                <Link href={buildPath("login", {})}>Sign in to claim</Link>
               </Button>
             )}
             {provider.phone && (
@@ -287,7 +285,7 @@ function ProviderProfile({
 
 export default function ProviderProfilePage() {
   const params = useParams();
-  const router = useRouter();
+  const router = useAppRouter();
   const { status } = useSession();
   const slug = params.slug as string | undefined;
   const { data: outlets, isLoading, isError, error } = useProviderOutlets();
@@ -308,12 +306,12 @@ export default function ProviderProfilePage() {
       return;
     }
     let cancelled = false;
-    fetch(`/api/profiles/claimed?outletKey=${encodeURIComponent(provider.outletKey)}`)
-      .then((res) => res.json())
-      .then((data: { claimed?: boolean; slug?: string }) => {
+    void fetch(`/api/profiles/claimed?outletKey=${encodeURIComponent(provider.outletKey)}`)
+      .then(async (res) => parseResponseJson<{ claimed?: boolean; slug?: string }>(res))
+      .then((data) => {
         if (cancelled) return;
-        if (data.claimed && data.slug) {
-          router.replace(`/profiles/${data.slug}`);
+        if (data?.claimed && data.slug) {
+          router.replace("claimedProfile", { slug: data.slug });
           return;
         }
         setClaimCheckDone(true);
@@ -332,9 +330,9 @@ export default function ProviderProfilePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ outletKey: provider.outletKey }),
       });
-      const data = (await res.json()) as { success?: boolean; slug?: string };
-      if (data.success && data.slug) {
-        router.replace(`/profiles/${data.slug}`);
+      const data = await parseResponseJson<{ success?: boolean; slug?: string }>(res);
+      if (data?.success && data.slug) {
+        router.replace("claimedProfile", { slug: data.slug });
       }
     } catch {
       // silent
@@ -360,7 +358,7 @@ export default function ProviderProfilePage() {
             {error instanceof Error ? error.message : "Something went wrong."}
           </p>
           <Button asChild variant="outline" size="default" className="mt-4">
-            <Link href="/provider-finder">Back to Provider Finder</Link>
+            <Link href={buildPath("providerFinder", {})}>Back to Provider Finder</Link>
           </Button>
         </Card>
       </div>
@@ -377,7 +375,7 @@ export default function ProviderProfilePage() {
             the Provider Finder.
           </p>
           <Button asChild variant="outline" size="default" className="mt-4">
-            <Link href="/provider-finder">Back to Provider Finder</Link>
+            <Link href={buildPath("providerFinder", {})}>Back to Provider Finder</Link>
           </Button>
         </Card>
       </div>

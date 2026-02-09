@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { buildPath } from "@/lib/router";
+import { parseResponseJson } from "@/lib/utils";
 
 type ClaimedProfile = {
   id: string;
@@ -67,7 +69,7 @@ function ClaimedProfileView({
       <main className="container mx-auto max-w-3xl px-4 py-8">
         <div className="mb-6 flex items-center justify-between gap-4">
           <Link
-            href="/provider-finder"
+            href={buildPath("providerFinder", {})}
             className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -276,8 +278,8 @@ function EditProfileModal({
         }),
       });
       if (!res.ok) throw new Error("Update failed");
-      const updated = (await res.json()) as ClaimedProfile;
-      onSave(updated);
+      const updated = await parseResponseJson<ClaimedProfile>(res);
+      if (updated) onSave(updated);
       onClose();
     } catch {
       setSaving(false);
@@ -428,8 +430,8 @@ export default function ClaimedProfilePage() {
         setProfile(null);
         return;
       }
-      const data = (await res.json()) as ClaimedProfile;
-      setProfile(data);
+      const data = await parseResponseJson<ClaimedProfile>(res);
+      if (data) setProfile(data);
     } catch {
       setError("Failed to load");
       setProfile(null);
@@ -461,7 +463,9 @@ export default function ClaimedProfilePage() {
             {error ?? `No profile matches "${slug}".`}
           </p>
           <Button asChild variant="outline" size="default" className="mt-4">
-            <Link href="/provider-finder">Back to Provider Finder</Link>
+            <Link href={buildPath("providerFinder", {})}>
+              Back to Provider Finder
+            </Link>
           </Button>
         </Card>
       </div>

@@ -50,8 +50,8 @@ module.exports = {
         ring: "hsl(var(--ring))",
       },
       fontFamily: {
-        sans: ["Plus Jakarta Sans", "sans-serif"],
-        heading: ["Outfit", "sans-serif"],
+        sans: ["var(--font-sans)", "system-ui", "sans-serif"],
+        heading: ["var(--font-heading)", "var(--font-sans)", "system-ui", "sans-serif"],
       },
     },
   },

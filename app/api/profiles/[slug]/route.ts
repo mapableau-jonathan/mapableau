@@ -1,5 +1,6 @@
-import { auth } from "@/app/lib/auth";
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { parseBody, profilePatchSchema } from "@/lib/validation";
 
 export async function GET(
   request: Request,
@@ -58,18 +59,8 @@ export async function PATCH(
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  let body: {
-    phone?: string;
-    email?: string;
-    website?: string;
-    description?: string;
-    openingHours?: string;
-  };
-  try {
-    body = (await request.json()) as typeof body;
-  } catch {
-    return Response.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
+  const [body, err] = await parseBody(request, profilePatchSchema);
+  if (err) return err;
 
   const updated = await prisma.claimedProvider.update({
     where: { slug },

@@ -1,5 +1,5 @@
-import ExtensionShowcasePage from "@/components/extension-showcase/ExtensionShowcasePage";
+import Home from "@/components/home";
 
 export default function Page() {
-  return <ExtensionShowcasePage />;
+  return <Home />;
 }

@@ -1,1 +1,1 @@
-- Add autocomplete to provider search
+- ~~Add autocomplete to provider search~~ (done: suggestions, keyboard nav, hover, Telehealth/In-person)

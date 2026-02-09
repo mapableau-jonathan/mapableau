@@ -1,6 +1,6 @@
-# OptimiseMe
+# AccessiBooks
 
-A Next.js application built with TypeScript.
+A Next.js application built with TypeScript. Your Online Accessible Library.
 
 ## Tech Stack
 

@@ -29,4 +29,10 @@ if (-not $nodeDir) {
 }
 
 $env:Path = "$nodeDir;" + $env:Path
-& npm $args
+# Prefer pnpm if present (project uses pnpm)
+$pnpmExe = Join-Path $nodeDir "pnpm.cmd"
+if (Test-Path $pnpmExe) {
+    & $pnpmExe @args
+} else {
+    & npm @args
+}

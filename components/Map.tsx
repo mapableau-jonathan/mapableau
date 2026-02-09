@@ -1,29 +1,34 @@
 "use client";
 
-import L, { type LatLngExpression, latLngBounds } from "leaflet";
+import {
+  type LatLngExpression,
+  divIcon,
+  latLngBounds,
+} from "leaflet";
 import { useEffect } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
 import type { Provider } from "@/app/provider-finder/providers";
+import { formatPlace } from "@/lib/place";
 import "@/lib/leafletIcons";
 
 // Use divIcons for all markers so we never rely on L.Icon.Default (avoids createIcon undefined in some envs)
-const defaultMarkerIcon = L.divIcon({
+const defaultMarkerIcon = divIcon({
   className: "default-marker-icon",
   html: `<div style="width:22px;height:22px;background:#2563eb;border:2px solid white;border-radius:50%;box-shadow:0 2px 4px rgba(0,0,0,0.3)"></div>`,
   iconSize: [22, 22],
   iconAnchor: [11, 11],
 });
 
-const redMarkerIcon = L.divIcon({
+const redMarkerIcon = divIcon({
   className: "red-marker-icon",
   html: `<div style="width:24px;height:24px;background:#dc2626;border:3px solid white;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.35)"></div>`,
   iconSize: [24, 24],
   iconAnchor: [12, 12],
 });
 
-const userPositionIcon = L.divIcon({
+const userPositionIcon = divIcon({
   className: "user-marker-icon",
   html: `<div style="width:20px;height:20px;background:#16a34a;border:2px solid white;border-radius:50%;box-shadow:0 2px 4px rgba(0,0,0,0.3)"></div>`,
   iconSize: [20, 20],
@@ -187,9 +192,7 @@ export default function Map({
             <div className="min-w-[200px]">
               <h3 className="font-semibold text-sm mb-1">{provider.name}</h3>
               <p className="text-xs text-muted-foreground mb-2">
-                {provider.suburb === "Remote"
-                  ? "Telehealth (Australia-wide)"
-                  : `${provider.suburb} ${provider.state} ${provider.postcode}`}
+                {formatPlace(provider) ?? "—"}
               </p>
               <div className="flex items-center gap-2 text-xs mb-2">
                 <span className="font-medium">

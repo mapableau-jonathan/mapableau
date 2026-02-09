@@ -1,38 +1,35 @@
 "use client";
 
-import { MapPin, Facebook, Twitter, Instagram, Linkedin } from "lucide-react";
+import { BookOpen, Facebook, Instagram, Linkedin, Twitter } from "lucide-react";
 import Link from "next/link";
+
+import { APP_NAME, APP_DESCRIPTION } from "@/lib/brand";
+import { buildPath } from "@/lib/router";
 
 export default function Footer() {
   return (
     <footer
       id="footer"
-      className="bg-slate-50 border-t border-slate-200 pt-16 pb-8"
+      className="bg-muted/50 border-t border-border pt-12 pb-6"
       role="contentinfo"
       tabIndex={-1}
     >
-      <div className="container mx-auto px-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
+      <div className="content-width">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-8">
           {/* Brand */}
           <div className="col-span-1 md:col-span-1">
             <div className="flex items-center gap-2 mb-4">
               <div className="bg-primary rounded-lg p-1.5">
-                <MapPin className="h-5 w-5 text-white fill-white" />
+                <BookOpen className="h-5 w-5 text-white fill-white" />
               </div>
               <span className="font-heading text-xl font-bold text-primary">
-                MapAble
+                {APP_NAME}
               </span>
             </div>
             <p className="text-muted-foreground text-sm leading-relaxed mb-6">
-              Enabling people with disabilities to live independent and
-              dignified lives through innovative technology in care, transport,
-              and employment.
+              {APP_DESCRIPTION}
             </p>
-            <div
-              className="flex gap-4"
-              role="list"
-              aria-label="Social media links"
-            >
+            <div className="flex gap-4" aria-label="Social media links">
               <a
                 href="https://facebook.com"
                 target="_blank"
@@ -91,35 +88,27 @@ export default function Footer() {
           {/* Links */}
           <div>
             <h4 className="font-heading font-semibold text-foreground mb-4">
-              Platform
+              Library
             </h4>
             <ul className="space-y-3">
               <li>
-                <Link href="/care">
-                  <span className="text-sm text-muted-foreground hover:text-primary cursor-pointer">
-                    MapAble Care
-                  </span>
+                <Link href={buildPath("providerFinder", {})} className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                  Browse Collection
                 </Link>
               </li>
               <li>
-                <Link href="/transport">
-                  <span className="text-sm text-muted-foreground hover:text-primary cursor-pointer">
-                    MapAble Transport
-                  </span>
+                <Link href={buildPath("dashboard", {})} className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                  My Library
                 </Link>
               </li>
               <li>
-                <Link href="/employment">
-                  <span className="text-sm text-muted-foreground hover:text-primary cursor-pointer">
-                    MapAble Employment
-                  </span>
+                <Link href={buildPath("register", {})} className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                  Join Free
                 </Link>
               </li>
               <li>
-                <Link href="/dashboard">
-                  <span className="text-sm text-muted-foreground hover:text-primary cursor-pointer">
-                    MapAble Dashboard
-                  </span>
+                <Link href={buildPath("login", {})} className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                  Sign In
                 </Link>
               </li>
             </ul>
@@ -131,31 +120,28 @@ export default function Footer() {
             </h4>
             <ul className="space-y-3">
               <li>
-                <Link href="/ndis">
-                  <span className="text-sm text-muted-foreground hover:text-primary cursor-pointer">
-                    NDIS Profile
-                  </span>
+                <a
+                  href="https://ausdis.au"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-muted-foreground hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-md"
+                >
+                  Australian Disability (ausdis.au)
+                </a>
+              </li>
+              <li>
+                <Link href="/" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                  Accessibility
                 </Link>
               </li>
               <li>
-                <Link href="/accessibility-map">
-                  <span className="text-sm text-muted-foreground hover:text-primary cursor-pointer">
-                    Accessibility Map
-                  </span>
+                <Link href="/" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                  Help Centre
                 </Link>
               </li>
               <li>
-                <Link href="/support-centre">
-                  <span className="text-sm text-muted-foreground hover:text-primary cursor-pointer">
-                    Help Centre
-                  </span>
-                </Link>
-              </li>
-              <li>
-                <Link href="/resources">
-                  <span className="text-sm text-muted-foreground hover:text-primary cursor-pointer">
-                    Resources
-                  </span>
+                <Link href="/" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                  About Us
                 </Link>
               </li>
             </ul>
@@ -166,24 +152,23 @@ export default function Footer() {
               Contact
             </h4>
             <ul className="space-y-3 text-sm text-muted-foreground">
-              <li>support@mapable.com.au</li>
-              <li>1300 MAP ABLE</li>
+              <li>support@accessibooks.com</li>
               <li>Sydney, Australia</li>
             </ul>
           </div>
         </div>
 
-        <div className="border-t border-slate-200 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="border-t border-border pt-6 flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-xs text-muted-foreground text-center md:text-left">
-            © 2025 Australian Disability Ltd. All rights reserved.
+            © 2025 {APP_NAME}. All rights reserved.
           </p>
           <div className="flex gap-6 text-xs text-muted-foreground">
-            <span className="hover:text-primary cursor-pointer">
+            <Link href="/privacy" className="hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-md">
               Privacy Policy
-            </span>
-            <span className="hover:text-primary cursor-pointer">
+            </Link>
+            <Link href="/terms" className="hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-md">
               Terms of Service
-            </span>
+            </Link>
           </div>
         </div>
       </div>

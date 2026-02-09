@@ -2,8 +2,7 @@
 
 import dynamic from "next/dynamic";
 
-// todo: what does this do?
-// "5️⃣ Dynamically import the map (avoid SSR crash)"
+/** Dynamic import avoids SSR crash (Leaflet/DOM). */
 const Map = dynamic(() => import("@/components/Map"), {
   ssr: false,
 });

@@ -86,9 +86,12 @@ export function mapOutletToProvider(
   const outletKey =
     `${o.ABN}-${slugify(outletName)}-${slugify(outletAddr)}` || undefined;
 
+  // Unique URL slug: use outletKey (stable, unique, used for claim) or fallback to id
+  const slug = outletKey ?? id;
+
   return {
     id,
-    slug: slugify(name) || id,
+    slug,
     outletKey,
     name,
     suburb: suburb || "—",

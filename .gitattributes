@@ -1,0 +1,16 @@
+# Line endings: normalize to LF in repo; checkout respects OS
+* text=auto eol=lf
+
+# Scripts that may need CRLF on Windows
+*.{cmd,[c]sh} text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary files
+*.{png,jpg,jpeg,gif,ico,webp} binary
+*.{woff,woff2,ttf,eot} binary
+*.{pdf,zip,jar} binary
+
+# Lockfiles: prevent merge noise
+package-lock.json binary
+pnpm-lock.yaml binary
+yarn.lock binary

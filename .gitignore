@@ -30,6 +30,7 @@ lerna-debug.log*
 # Local env files
 .env
 .env*.local
+env.dev
 .env.development.local
 .env.test.local
 .env.production.local
@@ -62,8 +63,8 @@ next-env.d.ts
 ehthumbs.db
 Thumbs.db
 
-# Package manager locks (keeping pnpm-lock.yaml, ignoring npm/yarn)
-package-lock.json
+# Package manager: pnpm (see package.json). Lockfiles below ignored; remove to commit.
+pnpm-lock.yaml
 yarn.lock
 
 # Husky (uncomment if you don't want to commit husky hooks)

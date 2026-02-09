@@ -1,8 +1,4 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// Prisma schema – https://pris.ly/d/prisma-schema
 
 generator client {
   provider = "prisma-client-js"
@@ -14,42 +10,66 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserType {
+  participant
+  provider
+}
+
 model User {
-  id               String             @id @default(cuid())
-  name             String?
-  email            String             @unique
-  passwordHash     String
-  createdAt        DateTime           @default(now())
-  sessions         Session[]
-  claimedProviders ClaimedProvider[]
+  id                 String             @id @default(cuid())
+  name               String?
+  email              String             @unique
+  passwordHash       String
+  userType           UserType?
+  createdAt          DateTime           @default(now())
+  claimedProviders   ClaimedProvider[]
+  participantProfile ParticipantProfile?
+}
+
+model ParticipantProfile {
+  id                  String   @id @default(cuid())
+  userId               String   @unique
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  slug                 String?  @unique
+  displayName         String?
+  visibility          String   @default("private")
+  accessibilityNeeds  String?
+  preferredCategories String[]
+  suburb              String?
+  state               String?
+  postcode            String?
+  savedProviderIds    String[]
+  ndisParticipantId   String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 }
 
 model ClaimedProvider {
-  id           String    @id @default(cuid())
-  slug         String    @unique
-  outletKey    String?   @unique
-  userId       String
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name         String
-  phone        String?
-  email        String?
-  website      String?
-  description  String?
-  openingHours String?
-  suburb       String?
-  state        String?
-  postcode     String?
-  categories   String[]
-  verifiedAt   DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id               String            @id @default(cuid())
+  slug             String            @unique
+  outletKey        String?           @unique
+  userId           String
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name             String
+  phone            String?
+  email            String?
+  website          String?
+  description      String?
+  openingHours     String?
+  suburb           String?
+  state            String?
+  postcode         String?
+  categories       String[]
+  abn              String?
+  verifiedAt       DateTime?
+  onboardingStatus OnboardingStatus  @default(not_started)
+  abnVerifiedAt    DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 }
 
-// todo: remove because we're using JWT
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+enum OnboardingStatus {
+  not_started
+  in_progress
+  completed
 }

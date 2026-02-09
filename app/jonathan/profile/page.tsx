@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { redirect } from "@/lib/router";
 
 export default function ProfilePage() {
-  redirect("/provider-finder");
+  redirect("providerFinder", {});
 }

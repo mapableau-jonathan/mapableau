@@ -1,9 +1,10 @@
 /**
  * Routing & Slug Provisioning System
  *
- * Central definitions for URL paths, slug generation, and resolution.
- * Use these helpers instead of hardcoding route strings.
+ * Re-exports from lib/router (universal router) plus slug utilities and API routes.
  */
+
+import { buildPath } from "./router";
 
 /** Slug character set: lowercase a-z, 0-9, hyphens only */
 const SLUG_REGEX = /^[a-z0-9-]+$/;
@@ -46,23 +47,24 @@ export function outletKey(
   return `${abn}-${slugify(outletName)}-${slugify(address)}`;
 }
 
-// ─── Route paths ─────────────────────────────────────────────────────────────
+// ─── Route paths (from universal router) ──────────────────────────────────────
 
 export const ROUTES = {
-  /** Provider Finder: browse outlet-sourced providers */
+  home: "/",
   providerFinder: "/provider-finder",
-
-  /** Outlet profile (read-only, from JSON). Redirects to claimed if exists. */
-  outletProfile: (slug: string) => `/jonathan/profile/${encodeURIComponent(slug)}`,
-
-  /** Claimed profile (editable, from DB) */
-  claimedProfile: (slug: string) => `/profiles/${encodeURIComponent(slug)}`,
-
-  /** Profile by slug: prefer claimed, fallback to outlet. Use outletProfile for outlet-first entry. */
-  profile: (slug: string) => `/profiles/${slug}`,
-
+  outletProfile: (slug: string) => buildPath("outletProfile", { slug }),
+  claimedProfile: (slug: string) => buildPath("claimedProfile", { slug }),
+  profile: (slug: string) => buildPath("claimedProfile", { slug }),
+  jonathan: "/jonathan",
+  jonathanDashboard: "/jonathan/dashboard",
+  jonathanParticipant: "/jonathan/participant",
+  jonathanParticipantProfile: (slug: string) =>
+    buildPath("jonathanParticipantProfile", { slug }),
+  jonathanEmulate: "/jonathan/emulate",
   login: "/login",
   register: "/register",
+  providerRegister: "/register/provider",
+  onboarding: "/onboarding",
   dashboard: "/dashboard",
   map: "/map",
 } as const;
@@ -75,7 +77,12 @@ export const API_ROUTES = {
     claimed: (outletKey: string) =>
       `/api/profiles/claimed?outletKey=${encodeURIComponent(outletKey)}`,
     profile: (slug: string) => `/api/profiles/${encodeURIComponent(slug)}`,
+    mine: "/api/profiles/mine",
     verify: (token: string) => `/api/profiles/verify?token=${encodeURIComponent(token)}`,
+  },
+  participants: {
+    me: "/api/participants/me",
+    bySlug: (slug: string) => `/api/participants/${encodeURIComponent(slug)}`,
   },
 } as const;
 

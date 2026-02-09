@@ -1,10 +1,9 @@
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
-
-import { auth } from "@/app/lib/auth";
+import { auth } from "@/lib/auth";
 import { mapOutletsToProviders } from "@/app/provider-finder/outletToProvider";
 import type { ProviderOutlet } from "@/data/provider-outlets.types";
+import { getProviderOutlets } from "@/lib/provider-outlets";
 import { prisma } from "@/lib/prisma";
+import { parseBody, claimProfileSchema } from "@/lib/validation";
 
 export async function POST(request: Request) {
   const session = await auth();
@@ -12,28 +11,12 @@ export async function POST(request: Request) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { outletKey: string };
-  try {
-    body = (await request.json()) as { outletKey: string };
-  } catch {
-    return Response.json(
-      { error: "Invalid JSON body" },
-      { status: 400 },
-    );
-  }
+  const [body, err] = await parseBody(request, claimProfileSchema);
+  if (err) return err;
 
   const { outletKey } = body;
-  if (!outletKey || typeof outletKey !== "string") {
-    return Response.json(
-      { error: "outletKey is required" },
-      { status: 400 },
-    );
-  }
 
-  const path = join(process.cwd(), "public", "data", "provider-outlets.json");
-  const raw = await readFile(path, "utf-8");
-  const json = JSON.parse(raw) as { data: ProviderOutlet[] };
-  const outlets = json.data ?? [];
+  const outlets = await getProviderOutlets();
   const providers = mapOutletsToProviders(outlets);
   const provider = providers.find((p) => p.outletKey === outletKey);
 
@@ -76,7 +59,13 @@ export async function POST(request: Request) {
       postcode: provider.postcode ?? null,
       categories: provider.categories,
       verifiedAt: new Date(),
+      onboardingStatus: "in_progress",
     },
+  });
+
+  await prisma.user.update({
+    where: { id: session.user.id },
+    data: { userType: "provider" },
   });
 
   return Response.json({
