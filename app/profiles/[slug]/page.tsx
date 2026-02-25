@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -211,17 +211,32 @@ function ClaimedProfileView({
 
           <CardFooter className="flex gap-3 border-t border-border/70 pt-6">
             {profile.phone && (
-              <Button asChild variant="default" size="default" className="flex-1">
+              <Button
+                asChild
+                variant="default"
+                size="default"
+                className="flex-1"
+              >
                 <a href={`tel:${profile.phone.replace(/\s/g, "")}`}>Call</a>
               </Button>
             )}
             {profile.email && (
-              <Button asChild variant="outline" size="default" className="flex-1">
+              <Button
+                asChild
+                variant="outline"
+                size="default"
+                className="flex-1"
+              >
                 <a href={`mailto:${profile.email}`}>Email</a>
               </Button>
             )}
             {profile.website && (
-              <Button asChild variant="outline" size="default" className="flex-1">
+              <Button
+                asChild
+                variant="outline"
+                size="default"
+                className="flex-1"
+              >
                 <a
                   href={
                     profile.website.startsWith("http")
@@ -255,9 +270,7 @@ function EditProfileModal({
   const [email, setEmail] = useState(profile.email ?? "");
   const [website, setWebsite] = useState(profile.website ?? "");
   const [description, setDescription] = useState(profile.description ?? "");
-  const [openingHours, setOpeningHours] = useState(
-    profile.openingHours ?? "",
-  );
+  const [openingHours, setOpeningHours] = useState(profile.openingHours ?? "");
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -479,7 +492,9 @@ export default function ClaimedProfilePage() {
         <EditProfileModal
           profile={profile}
           onClose={() => setEditing(false)}
-          onSave={(updated) => setProfile((p) => (p ? { ...p, ...updated } : p))}
+          onSave={(updated) =>
+            setProfile((p) => (p ? { ...p, ...updated } : p))
+          }
         />
       )}
     </>
