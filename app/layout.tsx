@@ -1,9 +1,7 @@
 import "@/app/index.css";
 import "leaflet/dist/leaflet.css";
-import { SessionProvider } from "next-auth/react";
 
-import { BrandProvider } from "@/app/contexts/BrandContext";
-import { QueryProvider } from "@/lib/query-provider";
+import { Providers } from "@/components/providers";
 
 export default function RootLayout({
   children,
@@ -13,11 +11,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <SessionProvider>
-          <QueryProvider>
-            <BrandProvider>{children}</BrandProvider>
-          </QueryProvider>
-        </SessionProvider>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
