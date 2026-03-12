@@ -18,10 +18,51 @@ model User {
   id               String             @id @default(cuid())
   name             String?
   email            String             @unique
+  worker           Worker?
   passwordHash     String
   createdAt        DateTime           @default(now())
   sessions         Session[]
   claimedProviders ClaimedProvider[]
+
+  memberships      ProviderUserRole[]
+}
+
+model Worker {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id])
+
+  bio             String?
+  qualifications  String?
+  languages       Language[]
+  availability    WorkerAvailability[]
+  specialisations Specialisation[]
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  providers WorkerProvider[]
+}
+
+model Language {
+  id             String   @id @default(uuid())
+  name           String
+  workers        Worker[]
+}
+
+model WorkerAvailability {
+  id             String   @id @default(uuid())
+  workerId       String
+  worker         Worker   @relation(fields: [workerId], references: [id])
+  dayOfWeek      DayOfWeek
+  startTime      String
+  endTime        String
+}
+
+model Specialisation {
+  id             String   @id @default(uuid())
+  name           String
+  workers        Worker[]
 }
 
 model ClaimedProvider {
@@ -45,6 +86,86 @@ model ClaimedProvider {
   updatedAt    DateTime  @updatedAt
 }
 
+model Provider {
+  id            String   @id @default(uuid())
+  name          String
+  logoUrl       String?
+  description   String?
+
+  website       String?
+  email         String?
+  phone         String?
+
+  ndisRegistered Boolean @default(false)
+  ndisNumber     String?
+
+  services      Service[]
+  locations     ServiceLocation[]
+  businessHours BusinessHour[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  workers WorkerProvider[]
+  userRoles ProviderUserRole[]
+}
+
+model ProviderUserRole {
+  id          String   @id @default(uuid())
+  userId      String
+  providerId  String
+  role        ProviderRole
+  assignedAt  DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider    Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, providerId]) // ensures a user has only one role per provider
+}
+
+model Service {
+  id         String   @id @default(uuid())
+  name       String
+  provider   Provider @relation(fields: [providerId], references: [id])
+  providerId String
+}
+
+model ServiceLocation {
+  id         String   @id @default(uuid())
+  address    String
+  city       String?
+  state      String?
+  postcode   String?
+  country    String?
+
+  provider   Provider @relation(fields: [providerId], references: [id])
+  providerId String
+}
+
+model BusinessHour {
+  id         String   @id @default(uuid())
+  dayOfWeek  DayOfWeek
+  openTime   String
+  closeTime  String
+
+  provider   Provider @relation(fields: [providerId], references: [id])
+  providerId String
+}
+
+model WorkerProvider {
+  id         String   @id @default(uuid())
+  workerId   String
+  providerId String
+
+  worker     Worker   @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  provider   Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  startDate  DateTime?
+  endDate    DateTime?
+
+  @@unique([workerId, providerId])
+}
+
 // todo: remove because we're using JWT
 model Session {
   id           String   @id @default(cuid())
@@ -52,4 +173,20 @@ model Session {
   userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum ProviderRole {
+  ADMIN
+  MANAGER
+  STAFF
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
 }
