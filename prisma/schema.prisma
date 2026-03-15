@@ -96,8 +96,17 @@ model Provider {
   email         String?
   phone         String?
 
+  abn           String?
+  businessType  String?  // e.g. "Company", "Sole trader", "Partnership"
+
   ndisRegistered Boolean @default(false)
   ndisNumber     String?
+
+  rating         Float?   // average rating 0–5
+  reviewCount    Int      @default(0)
+
+  serviceAreas   String[] @default([]) // geographic areas provider designates they serve, e.g. "Melbourne Metro", "Western Sydney"
+  specialisations String[] @default([]) // e.g. "Autism", "Complex Behaviour", "Mental Health"
 
   services      Service[]
   locations     ServiceLocation[]
@@ -124,10 +133,11 @@ model ProviderUserRole {
 }
 
 model Service {
-  id         String   @id @default(uuid())
-  name       String
-  provider   Provider @relation(fields: [providerId], references: [id])
-  providerId String
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  provider    Provider @relation(fields: [providerId], references: [id])
+  providerId  String
 }
 
 model ServiceLocation {
