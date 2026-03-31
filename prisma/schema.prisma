@@ -10,59 +10,89 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("NON_POOLING_DATABASE_URL")
+}
+
+model Address {
+  id       String  @id @default(uuid())
+  street   String
+  suburb   String?
+  city     String?
+  state    String?
+  postcode String?
+  country  String  @default("Australia")
+
+  latitude  Float?
+  longitude Float?
+
+  formatted String? // full display string from Google, etc.
+
+  createdAt DateTime @default(now())
+
+  providers              Provider[]
+  providerOutlets        ProviderOutlet[]
+  serviceLocations       ProviderServiceLocation[]
+  outletServiceLocations ProviderOutletServiceLocation[]
 }
 
 model User {
-  id               String             @id @default(cuid())
+  id               String            @id @default(cuid())
   name             String
-  email            String             @unique
+  email            String            @unique
   worker           Worker?
   passwordHash     String
-  createdAt        DateTime           @default(now())
+  createdAt        DateTime          @default(now())
   sessions         Session[]
   claimedProviders ClaimedProvider[]
 
-  memberships      ProviderUserRole[]
+  memberships       ProviderUserRole[]
+  outletMemberships ProviderOutletUserRole[]
 }
 
 model Worker {
-  id             String   @id @default(uuid())
-  userId         String   @unique
-  user           User     @relation(fields: [userId], references: [id])
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   bio             String?
   qualifications  String?
   languages       Language[]
   availability    WorkerAvailability[]
-  specialisations Specialisation[]
+  specialisations WorkerSpecialisation[]
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  providers WorkerProvider[]
+  providers   ProviderWorker[]
+  outletLinks ProviderOutletWorker[]
+
+  @@index([userId])
 }
 
 model Language {
-  id             String   @id @default(uuid())
-  name           String
-  workers        Worker[]
+  id      String   @id @default(uuid())
+  name    String
+  workers Worker[]
 }
 
 model WorkerAvailability {
-  id             String   @id @default(uuid())
-  workerId       String
-  worker         Worker   @relation(fields: [workerId], references: [id])
-  dayOfWeek      DayOfWeek
-  startTime      String
-  endTime        String
+  id        String    @id @default(uuid())
+  workerId  String
+  dayOfWeek DayOfWeek
+  startTime String
+  endTime   String
+
+  worker Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@index([workerId])
 }
 
-model Specialisation {
-  id             String   @id @default(uuid())
-  name           String
-  workers        Worker[]
+model WorkerSpecialisation {
+  id      String   @id @default(uuid())
+  name    String
+  workers Worker[]
 }
 
 model ClaimedProvider {
@@ -86,94 +116,225 @@ model ClaimedProvider {
   updatedAt    DateTime  @updatedAt
 }
 
+model ProviderSpecialisation {
+  id        String     @id @default(uuid())
+  name      String
+  providers Provider[]
+}
+
+model ProviderOutletSpecialisation {
+  id              String           @id @default(uuid())
+  name            String
+  providerOutlets ProviderOutlet[]
+}
+
 model Provider {
-  id            String   @id @default(uuid())
-  name          String
-  logoUrl       String?
-  description   String?
+  id          String  @id @default(uuid())
+  name        String
+  addressId   String?
+  logoUrl     String?
+  description String?
 
-  website       String?
-  email         String?
-  phone         String?
+  website String?
+  email   String?
+  phone   String?
 
-  abn           String?
-  businessType  String?  // e.g. "Company", "Sole trader", "Partnership"
+  abn          String? @unique
+  businessType String? // e.g. "Company", "Sole trader", "Partnership"
 
   ndisRegistered Boolean @default(false)
   ndisNumber     String?
 
-  rating         Float?   // average rating 0–5
-  reviewCount    Int      @default(0)
+  rating      Float? // average rating 0–5
+  reviewCount Int    @default(0)
 
-  serviceAreas   String[] @default([]) // geographic areas provider designates they serve, e.g. "Melbourne Metro", "Western Sydney"
-  specialisations String[] @default([]) // e.g. "Autism", "Complex Behaviour", "Mental Health"
+  serviceAreas String[] @default([])
 
-  services      Service[]
-  locations     ServiceLocation[]
-  businessHours BusinessHour[]
+  address         Address?                  @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  specialisations ProviderSpecialisation[]
+  services        ProviderService[]
+  locations       ProviderServiceLocation[]
+  businessHours   ProviderBusinessHour[]
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  workers WorkerProvider[]
+  workers   ProviderWorker[]
   userRoles ProviderUserRole[]
+  outlets   ProviderOutlet[]
+}
+
+/// Physical or logical outlet under a provider (branch, site, listing).
+model ProviderOutlet {
+  id           String   @id @default(uuid())
+  name         String
+  addressId    String?
+  description  String?
+  website      String?
+  email        String?
+  phone        String?
+  ndisNumber   String?
+  abn          String?
+  businessType String?
+  rating       Float?
+  reviewCount  Int      @default(0)
+  serviceAreas String[] @default([])
+
+  providerId String
+  provider   Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  address         Address?                        @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  specialisations ProviderOutletSpecialisation[]
+  services        ProviderOutletService[]
+  locations       ProviderOutletServiceLocation[]
+  businessHours   ProviderOutletBusinessHour[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workers   ProviderOutletWorker[]
+  userRoles ProviderOutletUserRole[]
+
+  @@index([providerId])
 }
 
 model ProviderUserRole {
-  id          String   @id @default(uuid())
-  userId      String
-  providerId  String
-  role        ProviderRole
-  assignedAt  DateTime @default(now())
+  id         String   @id @default(uuid())
+  userId     String
+  providerId String
+  assignedAt DateTime @default(now())
 
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  provider    Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  role     ProviderRole
+  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider Provider     @relation(fields: [providerId], references: [id], onDelete: Cascade)
 
   @@unique([userId, providerId]) // ensures a user has only one role per provider
 }
 
-model Service {
-  id          String   @id @default(uuid())
+/// User role scoped to a specific provider outlet (mirrors ProviderUserRole).
+model ProviderOutletUserRole {
+  id               String   @id @default(uuid())
+  userId           String
+  providerOutletId String
+  assignedAt       DateTime @default(now())
+
+  role           ProviderRole
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  providerOutlet ProviderOutlet @relation(fields: [providerOutletId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, providerOutletId])
+}
+
+model ServiceDefinition {
+  id          String  @id @default(uuid())
   name        String
   description String?
-  provider    Provider @relation(fields: [providerId], references: [id])
-  providerId  String
+
+  providers       ProviderService[]
+  providerOutlets ProviderOutletService[]
+
+  @@unique([name])
 }
 
-model ServiceLocation {
-  id         String   @id @default(uuid())
-  address    String
-  city       String?
-  state      String?
-  postcode   String?
-  country    String?
+model ProviderService {
+  id                  String @id @default(uuid())
+  serviceDefinitionId String
+  providerId          String
 
-  provider   Provider @relation(fields: [providerId], references: [id])
+  serviceDefinition ServiceDefinition @relation(fields: [serviceDefinitionId], references: [id], onDelete: Cascade)
+  provider          Provider          @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceDefinitionId, providerId])
+  @@index([providerId])
+}
+
+model ProviderOutletService {
+  id                  String @id @default(uuid())
+  serviceDefinitionId String
+  providerOutletId    String
+
+  serviceDefinition ServiceDefinition @relation(fields: [serviceDefinitionId], references: [id], onDelete: Cascade)
+  providerOutlet    ProviderOutlet    @relation(fields: [providerOutletId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceDefinitionId, providerOutletId])
+  @@index([providerOutletId])
+}
+
+model ProviderServiceLocation {
+  id         String @id @default(uuid())
+  addressId  String
   providerId String
+
+  address  Address  @relation(fields: [addressId], references: [id], onDelete: Cascade)
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, addressId])
+  @@index([providerId])
 }
 
-model BusinessHour {
-  id         String   @id @default(uuid())
+model ProviderOutletServiceLocation {
+  id               String @id @default(uuid())
+  addressId        String
+  providerOutletId String
+
+  address        Address        @relation(fields: [addressId], references: [id], onDelete: Cascade)
+  providerOutlet ProviderOutlet @relation(fields: [providerOutletId], references: [id], onDelete: Cascade)
+
+  @@unique([providerOutletId, addressId])
+  @@index([providerOutletId])
+}
+
+model ProviderBusinessHour {
+  id         String    @id @default(uuid())
   dayOfWeek  DayOfWeek
   openTime   String
   closeTime  String
-
-  provider   Provider @relation(fields: [providerId], references: [id])
   providerId String
+
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId])
 }
 
-model WorkerProvider {
-  id         String   @id @default(uuid())
+model ProviderOutletBusinessHour {
+  id               String    @id @default(uuid())
+  dayOfWeek        DayOfWeek
+  openTime         String
+  closeTime        String
+  providerOutletId String
+
+  providerOutlet ProviderOutlet @relation(fields: [providerOutletId], references: [id], onDelete: Cascade)
+
+  @@index([providerOutletId])
+}
+
+model ProviderWorker {
+  id         String @id @default(uuid())
   workerId   String
   providerId String
 
-  worker     Worker   @relation(fields: [workerId], references: [id], onDelete: Cascade)
-  provider   Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  worker   Worker   @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
 
-  startDate  DateTime?
-  endDate    DateTime?
+  startDate DateTime?
+  endDate   DateTime?
 
   @@unique([workerId, providerId])
+}
+
+/// Worker assignment to a specific provider outlet (mirrors WorkerProvider).
+model ProviderOutletWorker {
+  id               String @id @default(uuid())
+  workerId         String
+  providerOutletId String
+
+  worker         Worker         @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  providerOutlet ProviderOutlet @relation(fields: [providerOutletId], references: [id], onDelete: Cascade)
+
+  startDate DateTime?
+  endDate   DateTime?
+
+  @@unique([workerId, providerOutletId])
 }
 
 // todo: remove because we're using JWT

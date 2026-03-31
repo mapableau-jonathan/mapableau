@@ -1,3 +1,0 @@
--- AlterTable
-ALTER TABLE "Provider" ADD COLUMN     "rating" DOUBLE PRECISION,
-ADD COLUMN     "reviewCount" INTEGER NOT NULL DEFAULT 0;
