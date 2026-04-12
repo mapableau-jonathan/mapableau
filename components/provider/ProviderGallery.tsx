@@ -1,9 +1,9 @@
 import { ImageIcon } from "lucide-react";
 
-import type { ProviderWithRelations } from "./types";
+import type { Provider } from "./types";
 
 type ProviderGalleryProps = {
-  provider: ProviderWithRelations;
+  provider: Provider;
 };
 
 // todo: implement gallery

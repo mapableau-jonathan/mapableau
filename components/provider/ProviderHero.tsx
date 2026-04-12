@@ -3,10 +3,10 @@ import Image from "next/image";
 
 import { Badge } from "@/components/ui/badge";
 
-import type { ProviderWithRelations } from "./types";
+import type { Provider } from "./types";
 
 type ProviderHeroProps = {
-  provider: ProviderWithRelations;
+  provider: Provider;
 };
 
 function StarRating({ rating }: { rating: number }) {
@@ -39,12 +39,18 @@ function formatAbn(abn: string): string {
   return `${digits.slice(0, 2)} ${digits.slice(2, 5)} ${digits.slice(5, 8)} ${digits.slice(8, 11)}`;
 }
 
-function formatLocation(provider: ProviderWithRelations): string | null {
-  const loc = provider.locations[0];
+// todo: test
+function formatLocation(provider: Provider): string | null {
+  const loc = provider.address ?? null;
   if (!loc) return null;
-  const parts = [loc.address, loc.city, loc.state, loc.postcode].filter(
-    Boolean,
-  );
+  if (!loc.street || !loc.suburb) return loc.addressString;
+  const parts = [
+    loc.street,
+    loc.suburb,
+    loc.city,
+    loc.state,
+    loc.postcode,
+  ].filter(Boolean);
   return parts.length > 0 ? parts.join(", ") : null;
 }
 

@@ -54,9 +54,28 @@ export async function getProviderWithWorkers(providerId: string) {
           worker: {
             include: {
               user: { select: { id: true, name: true, email: true } },
-              languages: { select: { id: true, name: true } },
-              specialisations: { select: { id: true, name: true } },
+              languages: {
+                select: {
+                  languageDefinition: { select: { id: true, name: true } },
+                },
+              },
+              specialisations: {
+                select: {
+                  id: true,
+                  specialisationDefinition: {
+                    select: { id: true, name: true },
+                  },
+                },
+              },
             },
+          },
+        },
+      },
+      specialisations: {
+        select: {
+          id: true,
+          specialisationDefinition: {
+            select: { id: true, name: true },
           },
         },
       },
@@ -84,7 +103,9 @@ export const getAdminResponse = (
       ndisRegistered: provider.ndisRegistered,
       ndisNumber: provider.ndisNumber,
       serviceAreas: provider.serviceAreas,
-      specialisations: provider.specialisations,
+      specialisations: provider.specialisations.map(
+        (s) => s.specialisationDefinition,
+      ),
     },
     workers: provider.workers.map((wp) => ({
       id: wp.worker.id,
@@ -93,25 +114,33 @@ export const getAdminResponse = (
       email: wp.worker.user.email,
       bio: wp.worker.bio,
       qualifications: wp.worker.qualifications,
-      languages: wp.worker.languages,
-      specialisations: wp.worker.specialisations,
+      languages: wp.worker.languages.map((l) => l.languageDefinition),
+      specialisations: wp.worker.specialisations.map(
+        (s) => s.specialisationDefinition,
+      ),
     })),
   };
 };
 
 export const getAdminCatalog = async (): Promise<GetCatalogResponse> => {
-  const [languages, specialisations] = await Promise.all([
-    prisma.language.findMany({
-      orderBy: { name: "asc" },
-      select: { id: true, name: true },
-    }),
-    prisma.specialisation.findMany({
-      orderBy: { name: "asc" },
-      select: { id: true, name: true },
-    }),
-  ]);
+  const [languages, specialisations, providerSpecialisations] =
+    await Promise.all([
+      prisma.languageDefinition.findMany({
+        orderBy: { name: "asc" },
+        select: { id: true, name: true },
+      }),
+      prisma.specialisationDefinition.findMany({
+        orderBy: { name: "asc" },
+        select: { id: true, name: true },
+      }),
+      prisma.specialisationDefinition.findMany({
+        orderBy: { name: "asc" },
+        select: { id: true, name: true },
+      }),
+    ]);
   return {
     languages,
     specialisations,
+    providerSpecialisations,
   };
 };

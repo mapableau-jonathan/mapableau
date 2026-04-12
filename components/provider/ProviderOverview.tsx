@@ -1,14 +1,17 @@
 import { Globe, Mail, Phone } from "lucide-react";
 
-import type { ProviderWithRelations } from "./types";
+import type { Provider } from "./types";
 
 type ProviderOverviewProps = {
-  provider: ProviderWithRelations;
+  provider: Provider;
 };
 
 export default function ProviderOverview({ provider }: ProviderOverviewProps) {
   const hasContact =
-    provider.phone || provider.email || provider.website || provider.description;
+    provider.phone ||
+    provider.email ||
+    provider.website ||
+    provider.description;
 
   if (!hasContact && !provider.description) return null;
 

@@ -16,7 +16,7 @@ export const adminResponseSchema = z.object({
     ndisRegistered: z.boolean(),
     ndisNumber: z.string().nullable(),
     serviceAreas: z.array(z.string()),
-    specialisations: z.array(z.string()),
+    specialisations: z.array(z.object({ id: z.string(), name: z.string() })),
   }),
   workers: z.array(
     z.object({
@@ -44,12 +44,15 @@ export const patchProviderPayloadSchema = z.object({
   ndisRegistered: z.boolean().nullable(),
   ndisNumber: z.string().nullable(),
   serviceAreas: z.array(z.string()).nullable(),
-  specialisations: z.array(z.string()).nullable(),
+  specialisations: z
+    .array(z.object({ id: z.string(), name: z.string() }))
+    .nullable(),
 });
 
 export const patchProviderResponseSchema = z.object({
   provider: patchProviderPayloadSchema.extend({
     id: z.string(),
+    specialisations: z.array(z.object({ id: z.string(), name: z.string() })),
   }),
 });
 
@@ -57,8 +60,8 @@ export const patchWorkerPayloadSchema = z.object({
   name: z.string().nullable(),
   bio: z.string().nullable(),
   qualifications: z.string().nullable(),
-  languageIds: z.array(z.string()).nullable(),
-  specialisationIds: z.array(z.string()).nullable(),
+  languageDefinitionIds: z.array(z.string()).nullable(),
+  specialisationDefinitionIds: z.array(z.string()).nullable(),
 });
 
 export const patchWorkerResponseSchema = z.object({
@@ -77,6 +80,10 @@ export const patchWorkerResponseSchema = z.object({
 export const catalogResponseSchema = z.object({
   languages: z.array(z.object({ id: z.string(), name: z.string() })),
   specialisations: z.array(z.object({ id: z.string(), name: z.string() })),
+  /** Provider org specialisations (`ProviderSpecialisationDefinition`) */
+  providerSpecialisations: z.array(
+    z.object({ id: z.string(), name: z.string() }),
+  ),
 });
 
 export const membershipResponseSchema = z.object({

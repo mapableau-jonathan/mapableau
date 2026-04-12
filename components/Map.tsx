@@ -1,12 +1,101 @@
 "use client";
 
 import L, { type LatLngExpression, latLngBounds } from "leaflet";
-import { Fragment, useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
 
-import type { Provider } from "@/app/provider-finder/providers";
+import "leaflet/dist/leaflet.css";
+import {
+  Address,
+  Provider,
+  ProviderOutlet,
+} from "@/app/provider-finder/providers";
+import { distanceKm } from "@/lib/geo";
 import "@/lib/leafletIcons";
+
+type ProviderWithAddress = {
+  type: "provider";
+  provider: Provider;
+  address: Address;
+  distanceKm: number;
+};
+type ProviderOutletWithAddress = {
+  type: "outlet";
+  providerOutlet: ProviderOutlet;
+  address: Address;
+  distanceKm: number;
+};
+type ProviderOrOutletWithAddress =
+  | ProviderWithAddress
+  | ProviderOutletWithAddress;
+
+/** Center + radius used with `/api/provider-finder/nearby` when the map viewport changes. */
+export type MapSearchView = {
+  lat: number;
+  lng: number;
+  radiusKm: number;
+};
+
+function radiusKmCoveringVisibleMap(map: L.Map): number {
+  const b = map.getBounds();
+  const c = b.getCenter();
+  const corners = [
+    b.getNorthEast(),
+    b.getSouthWest(),
+    b.getNorthWest(),
+    b.getSouthEast(),
+  ];
+  let maxD = 0;
+  for (const pt of corners) {
+    maxD = Math.max(maxD, distanceKm(c.lat, c.lng, pt.lat, pt.lng));
+  }
+  const padded = maxD * 1.08;
+  return Math.min(250, Math.max(0.5, padded));
+}
+
+/** Reports map center and a radius that covers the visible bounds (debounced `moveend`). */
+function MapViewReporter({
+  onViewChange,
+  debounceMs = 450,
+}: {
+  onViewChange: (view: MapSearchView) => void;
+  debounceMs?: number;
+}) {
+  const map = useMap();
+  const onViewChangeRef = useRef(onViewChange);
+  onViewChangeRef.current = onViewChange;
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const emit = () => {
+      const center = map.getCenter();
+      const radiusKm = radiusKmCoveringVisibleMap(map);
+      console.log("lat", Number(center.lat.toFixed(4)));
+      console.log("lng", Number(center.lng.toFixed(4)));
+      console.log("radiusKm", radiusKm);
+      console.log("center", center);
+      onViewChangeRef.current({
+        lat: Number(center.lat.toFixed(4)),
+        lng: Number(center.lng.toFixed(4)),
+        radiusKm: Math.round(radiusKm * 10) / 10,
+      });
+    };
+
+    const schedule = () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(emit, debounceMs);
+    };
+
+    map.on("moveend", schedule);
+
+    return () => {
+      map.off("moveend", schedule);
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [map, debounceMs]);
+
+  return null;
+}
 
 // Use divIcons for all markers so we never rely on L.Icon.Default (avoids createIcon undefined in some envs)
 const defaultMarkerIcon = L.divIcon({
@@ -30,50 +119,24 @@ const userPositionIcon = L.divIcon({
   iconAnchor: [10, 10],
 });
 
-// Approximate coordinates for Australian locations
-// In production, you'd use a geocoding service
-const locationToCoords: Record<string, LatLngExpression> = {
-  "Parramatta NSW": [-33.8148, 151.0033],
-  "Footscray VIC": [-37.8, 144.9],
-  "Morphett Vale SA": [-35.1167, 138.5167],
-  "Bayswater WA": [-31.9167, 115.9167],
-  "Chermside QLD": [-27.3833, 153.0333],
-  "Civic ACT": [-35.2833, 149.1333],
-  "Hobart TAS": [-42.8833, 147.3167],
-  "Darwin City NT": [-12.4634, 130.8456],
-  "Mildura VIC": [-34.1833, 142.15],
-  "Newcastle NSW": [-32.9283, 151.7817],
-  "Geelong VIC": [-38.15, 144.35],
-};
-
-function getProviderCoords(
-  suburb: string,
-  state: string,
-): LatLngExpression | null {
-  if (suburb === "Remote") return null;
-  const key = `${suburb} ${state}`;
-  return locationToCoords[key] || null;
-}
-
-function parseOpeningHours(hours: string): { day: string; hours: string }[] {
-  return hours
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map((segment) => {
-      const colonIdx = segment.indexOf(": ");
-      const day = colonIdx >= 0 ? segment.slice(0, colonIdx) : segment;
-      const time = colonIdx >= 0 ? segment.slice(colonIdx + 2) : "";
-      return { day, hours: time || "—" };
-    });
-}
-
 type MapProps = {
-  providers?: Provider[];
+  providers: ProviderWithAddress[];
+  providerOutlets: ProviderOutletWithAddress[];
   /** When set, show user position and fit bounds to include it */
   userPosition?: { lat: number; lng: number } | null;
   /** When set, fly map to this provider's position (uses lat/lng or geocode lookup) */
-  centerOnProvider?: Provider | null;
+  addressToCenterOn?: ProviderOrOutletWithAddress | null;
+  /**
+   * Called after the map finishes moving (debounced). Use with nearby-provider queries
+   * scoped to the visible viewport.
+   */
+  onViewChange?: (view: MapSearchView) => void;
+  /**
+   * `always` — refit whenever marker props change (default for simple map pages).
+   * `initial-only` — fit to markers once when they first appear; later marker updates
+   * do not move the map (avoids feedback loops when markers come from the map viewport).
+   */
+  fitBoundsPolicy?: "always" | "initial-only";
 };
 
 // Default center: Sydney, Australia
@@ -84,87 +147,103 @@ const initialZoom = 6;
 function FitBounds({
   markers,
   userPosition,
+  fitBoundsPolicy,
 }: {
-  markers: { provider: Provider; coords: LatLngExpression }[];
+  markers: {
+    coords: LatLngExpression;
+    providerOrOutletWithAddress: ProviderOrOutletWithAddress;
+  }[];
   userPosition: { lat: number; lng: number } | null;
+  fitBoundsPolicy: "always" | "initial-only";
 }) {
   const map = useMap();
+  const didFitRef = useRef(false);
 
   useEffect(() => {
-    const points: [number, number][] = markers.map((m) => m.coords as [number, number]);
+    const points: [number, number][] = markers.map(
+      (m) => m.coords as [number, number],
+    );
     if (userPosition) {
       points.push([userPosition.lat, userPosition.lng]);
     }
     if (points.length === 0) {
+      didFitRef.current = false;
       map.setView(initialCenter, initialZoom);
+      return;
+    }
+    if (fitBoundsPolicy === "initial-only" && didFitRef.current) {
       return;
     }
     if (points.length === 1) {
       map.setView(points[0], 13);
-      return;
+    } else {
+      const bounds = latLngBounds(points);
+      map.fitBounds(bounds, {
+        padding: [50, 50],
+        maxZoom: 15,
+      });
     }
-    const bounds = latLngBounds(points);
-    map.fitBounds(bounds, {
-      padding: [50, 50],
-      maxZoom: 15,
-    });
-  }, [map, markers, userPosition]);
+    if (fitBoundsPolicy === "initial-only") {
+      didFitRef.current = true;
+    }
+  }, [map, markers, userPosition, fitBoundsPolicy]);
 
   return null;
 }
 
 const CENTER_ZOOM = 14;
 
-function getCoords(provider: Provider): [number, number] | null {
+function getCoords(address: Address): [number, number] | null {
   if (
-    provider.latitude != null &&
-    provider.longitude != null &&
-    (provider.latitude !== 0 || provider.longitude !== 0)
+    address.latitude != null &&
+    address.longitude != null &&
+    (address.latitude !== 0 || address.longitude !== 0)
   ) {
-    return [provider.latitude, provider.longitude];
+    return [address.latitude, address.longitude];
   }
-  const coords = getProviderCoords(provider.suburb, provider.state);
-  if (!coords) return null;
-  return coords as [number, number];
+  return null;
 }
 
 // Fly map to a provider when centerOnProvider changes
 function FlyToProvider({
-  centerOnProvider,
+  providerOrOutlet,
 }: {
-  centerOnProvider: Provider | null | undefined;
+  providerOrOutlet: ProviderOrOutletWithAddress | null;
 }) {
   const map = useMap();
 
   useEffect(() => {
-    if (!centerOnProvider) return;
-    const coords = getCoords(centerOnProvider);
+    const address = providerOrOutlet?.address;
+    if (!address) return;
+    const coords = getCoords(address);
     if (!coords) return;
     map.flyTo(coords, CENTER_ZOOM, { duration: 0.5 });
-  }, [map, centerOnProvider]);
+  }, [map, providerOrOutlet]);
 
   return null;
 }
 
 export default function Map({
   providers = [],
+  providerOutlets = [],
   userPosition = null,
-  centerOnProvider = null,
+  addressToCenterOn = null,
+  onViewChange,
+  fitBoundsPolicy = "always",
 }: MapProps) {
-  const markers = providers
-    .map((provider) => {
+  const markers = [...providers, ...providerOutlets]
+    .map((p) => {
+      const address = p.address;
       const coords =
-        provider.latitude != null &&
-        provider.longitude != null &&
-        (provider.latitude !== 0 || provider.longitude !== 0)
-          ? ([provider.latitude, provider.longitude] as LatLngExpression)
-          : getProviderCoords(provider.suburb, provider.state);
+        address.latitude != null &&
+        address.longitude != null &&
+        (address.latitude !== 0 || address.longitude !== 0)
+          ? ([address.latitude, address.longitude] as LatLngExpression)
+          : null;
       if (!coords) return null;
-      return { provider, coords };
+      return { coords, providerOrOutletWithAddress: p };
     })
-    .filter(
-      (m): m is { provider: Provider; coords: LatLngExpression } => m !== null,
-    );
+    .filter((m) => m !== null);
 
   return (
     <MapContainer
@@ -181,100 +260,144 @@ export default function Map({
         attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      <FitBounds markers={markers} userPosition={userPosition ?? null} />
-      <FlyToProvider centerOnProvider={centerOnProvider ?? null} />
+      <FitBounds
+        markers={markers}
+        userPosition={userPosition ?? null}
+        fitBoundsPolicy={fitBoundsPolicy}
+      />
+      <FlyToProvider providerOrOutlet={addressToCenterOn ?? null} />
+      {onViewChange ? <MapViewReporter onViewChange={onViewChange} /> : null}
       {userPosition ? (
-        <Marker position={[userPosition.lat, userPosition.lng]} icon={userPositionIcon}>
+        <Marker
+          position={[userPosition.lat, userPosition.lng]}
+          icon={userPositionIcon}
+        >
           <Popup>You are here</Popup>
         </Marker>
       ) : null}
-      {markers.map(({ provider, coords }) => (
-        <Marker
-          key={provider.id}
-          position={coords}
-          icon={
-            centerOnProvider?.id === provider.id ? redMarkerIcon : defaultMarkerIcon
-          }
-        >
-          <Popup>
-            <div className="min-w-[220px] max-w-[280px] text-xs leading-tight">
-              <h3 className="font-semibold text-sm mb-0.5">{provider.name}</h3>
-              <p className="text-muted-foreground mb-1">
-                {provider.suburb === "Remote"
-                  ? "Telehealth (Australia-wide)"
-                  : `${provider.suburb} ${provider.state} ${provider.postcode}`}
-              </p>
-              <div className="flex items-center gap-1.5 mb-1">
-                <span className="font-medium">
-                  ⭐ {provider.rating.toFixed(1)}
-                </span>
-                <span className="text-muted-foreground">
-                  ({provider.reviewCount} reviews)
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-1 mb-1">
-                {provider.categories.slice(0, 2).map((cat) => (
-                  <span
-                    key={cat}
-                    className="px-1.5 py-0.5 rounded bg-primary/10 text-primary"
-                  >
-                    {cat}
+      {markers.map(({ coords, providerOrOutletWithAddress }) => {
+        const entity =
+          "provider" in providerOrOutletWithAddress
+            ? providerOrOutletWithAddress.provider
+            : providerOrOutletWithAddress.providerOutlet;
+        // if ("provider" in providerOrOutletWithAddress) {
+        //   const provider = providerOrOutletWithAddress.provider;
+        //   const address = providerOrOutletWithAddress.address;
+        //   const distanceKm = providerOrOutletWithAddress.distanceKm;
+        // } else {
+        //   const outlet = providerOrOutletWithAddress.outlet;
+        //   const address = providerOrOutletWithAddress.address;
+        //   const distanceKm = providerOrOutletWithAddress.distanceKm;
+        // }
+
+        return (
+          <Marker
+            key={entity.id}
+            position={coords}
+            icon={
+              entity.id === addressToCenterOn?.address.id
+                ? redMarkerIcon
+                : defaultMarkerIcon
+            }
+          >
+            <Popup>
+              <div className="min-w-[220px] max-w-[280px] text-xs leading-tight">
+                <h3 className="font-semibold text-sm mb-0.5">{entity.name}</h3>
+                <p className="text-muted-foreground mb-1">
+                  {providerOrOutletWithAddress.address.suburb === "Remote"
+                    ? "Telehealth (Australia-wide)"
+                    : `${providerOrOutletWithAddress.address.addressString}`}
+                </p>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="font-medium">
+                    ⭐ {(entity.rating ?? 0).toFixed(1)}
                   </span>
-                ))}
-              </div>
-              {provider.phone ? (
-                <p className="mb-0.5">
-                  <span className="text-muted-foreground">Ph: </span>
-                  <a href={`tel:${provider.phone}`} className="text-primary hover:underline">
-                    {provider.phone}
-                  </a>
-                </p>
-              ) : null}
-              {provider.email ? (
-                <p className="mb-0.5 truncate">
-                  <span className="text-muted-foreground">Email: </span>
-                  <a href={`mailto:${provider.email}`} className="text-primary hover:underline truncate block" title={provider.email}>
-                    {provider.email}
-                  </a>
-                </p>
-              ) : null}
-              {provider.website ? (
-                <p className="mb-0.5 truncate">
-                  <span className="text-muted-foreground">Web: </span>
-                  <a
-                    href={provider.website.startsWith("http") ? provider.website : `https://${provider.website}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary hover:underline"
-                    title={provider.website}
-                  >
-                    {provider.website}
-                  </a>
-                </p>
-              ) : null}
-              {provider.abn ? (
-                <p className="mb-1">
-                  <span className="text-muted-foreground">ABN: </span>
-                  {provider.abn}
-                </p>
-              ) : null}
-              {provider.openingHours ? (
-                <div className="mt-1 pt-1 border-t border-border">
-                  <p className="font-medium text-muted-foreground mb-0.5">Hours</p>
-                  <div className="grid grid-cols-[max-content_1fr] gap-x-2 gap-y-0.5 tabular-nums">
-                    {parseOpeningHours(provider.openingHours).map(({ day, hours }) => (
-                      <Fragment key={day}>
-                        <span className="text-muted-foreground">{day}</span>
-                        <span>{hours}</span>
-                      </Fragment>
-                    ))}
-                  </div>
+                  <span className="text-muted-foreground">
+                    ({entity.reviewCount} reviews)
+                  </span>
                 </div>
-              ) : null}
-            </div>
-          </Popup>
-        </Marker>
-      ))}
+                <div className="flex flex-wrap gap-1 mb-1">
+                  {entity.services.slice(0, 3).map((sd) => (
+                    <span
+                      key={sd.serviceDefinition.id}
+                      className="px-1.5 py-0.5 rounded bg-primary/10 text-primary"
+                    >
+                      {sd.serviceDefinition.name}
+                    </span>
+                  ))}
+                </div>
+                {entity.phone ? (
+                  <p className="mb-0.5">
+                    <span className="text-muted-foreground">Ph: </span>
+                    <a
+                      href={`tel:${entity.phone}`}
+                      className="text-primary hover:underline"
+                    >
+                      {entity.phone}
+                    </a>
+                  </p>
+                ) : null}
+                {entity.email ? (
+                  <p className="mb-0.5 truncate">
+                    <span className="text-muted-foreground">Email: </span>
+                    <a
+                      href={`mailto:${entity.email}`}
+                      className="text-primary hover:underline truncate block"
+                      title={entity.email}
+                    >
+                      {entity.email}
+                    </a>
+                  </p>
+                ) : null}
+                {entity.website ? (
+                  <p className="mb-0.5 truncate">
+                    <span className="text-muted-foreground">Web: </span>
+                    <a
+                      href={
+                        entity.website.startsWith("http")
+                          ? entity.website
+                          : `https://${entity.website}`
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                      title={entity.website}
+                    >
+                      {entity.website}
+                    </a>
+                  </p>
+                ) : null}
+                {entity.abn ? (
+                  <p className="mb-1">
+                    <span className="text-muted-foreground">ABN: </span>
+                    {entity.abn}
+                  </p>
+                ) : null}
+                {/* {entity.businessHours.length > 0 ? (
+                  <div className="mt-1 pt-1 border-t border-border">
+                    <p className="font-medium text-muted-foreground mb-0.5">
+                      Hours
+                    </p>
+                    <div className="grid grid-cols-[max-content_1fr] gap-x-2 gap-y-0.5 tabular-nums">
+                      {entity.businessHours.map((bh) => (
+                        <Fragment key={bh.id}>
+                          <span className="text-muted-foreground">
+                            {bh.dayOfWeek}
+                          </span>
+                          <span>
+                            {getDbTimeString(bh.openTime)} -{" "}
+                            {getDbTimeString(bh.closeTime)}
+                          </span>
+                        </Fragment>
+                      ))}
+                    </div>
+                  </div>
+                ) : null} */}
+              </div>
+            </Popup>
+          </Marker>
+        );
+      })}
     </MapContainer>
   );
 }

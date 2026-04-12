@@ -1,37 +1,27 @@
-import type { ProviderOutlet } from "@/data/provider-outlets.types";
+// todo: move out of lib
+
+import type { Provider } from "@/app/provider-finder/providers";
 
 /**
- * URL for provider-outlets JSON served from public/ (Next.js serves public/ at site root).
- * File lives at public/data/provider-outlets.json → URL /data/provider-outlets.json
+ * Fetches up to 100 nearest provider outlets from the database (by lat/lng).
+ * Uses `/api/provider-finder/nearby` (server Haversine + Prisma).
  */
-export const PROVIDER_OUTLETS_JSON_URL = "/data/provider-outlets.json";
-
-/**
- * Fetches provider/outlet records from the public JSON (public/data/provider-outlets.json).
- * Use in client or server; returns typed ProviderOutlet[].
- */
-export async function fetchProviderOutlets(
-  requestInit?: RequestInit,
-): Promise<ProviderOutlet[]> {
+/** Load one outlet by database id (profile links). */
+export async function fetchProviderOutletById(
+  id: string,
+  options?: { signal?: AbortSignal },
+): Promise<Provider | null> {
   const base =
     typeof window !== "undefined" ? "" : (process.env.NEXT_PUBLIC_ORIGIN ?? "");
-  const url = `${base}${PROVIDER_OUTLETS_JSON_URL}`;
-  const res = await fetch(url, requestInit);
+  const res = await fetch(
+    `${base}/api/provider-finder/outlet?id=${encodeURIComponent(id)}`,
+    { signal: options?.signal },
+  );
+  if (res.status === 404) return null;
   if (!res.ok) {
-    throw new Error(
-      `Failed to fetch provider outlets: ${res.status} ${res.statusText}`,
-    );
+    const err = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(err.error ?? `Failed to load provider: ${res.status}`);
   }
-  const raw = (await res.json()) as { data: ProviderOutlet[] };
-  const data = raw.data;
-  if (!data || !Array.isArray(data)) {
-    throw new Error("Provider outlets response is not an array or is empty");
-  }
-  return data;
+  const body = (await res.json()) as { provider?: Provider };
+  return body.provider ?? null;
 }
-
-export type {
-  ProviderOutlet,
-  OutletFlag,
-  StateCode,
-} from "@/data/provider-outlets.types";

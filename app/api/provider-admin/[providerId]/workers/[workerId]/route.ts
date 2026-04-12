@@ -40,7 +40,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const link = await prisma.workerProvider.findUnique({
+  const link = await prisma.providerWorker.findUnique({
     where: {
       workerId_providerId: { workerId, providerId },
     },
@@ -83,24 +83,25 @@ export async function PATCH(
     body.bio !== undefined ||
     body.qualifications !== undefined;
   const hasRelField =
-    body.languageIds !== undefined || body.specialisationIds !== undefined;
+    body.languageDefinitionIds !== undefined ||
+    body.specialisationDefinitionIds !== undefined;
 
   if (!hasProfileField && !hasRelField) {
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });
   }
 
-  if (body.languageIds !== undefined) {
-    if (!Array.isArray(body.languageIds)) {
+  if (body.languageDefinitionIds !== undefined) {
+    if (!Array.isArray(body.languageDefinitionIds)) {
       return NextResponse.json(
-        { error: "languageIds must be an array" },
+        { error: "languageDefinitionIds must be an array" },
         { status: 400 },
       );
     }
-    const langs = await prisma.language.findMany({
-      where: { id: { in: body.languageIds } },
+    const langs = await prisma.languageDefinition.findMany({
+      where: { id: { in: body.languageDefinitionIds } },
       select: { id: true },
     });
-    if (langs.length !== body.languageIds.length) {
+    if (langs.length !== body.languageDefinitionIds.length) {
       return NextResponse.json(
         { error: "One or more language ids are invalid" },
         { status: 400 },
@@ -108,18 +109,18 @@ export async function PATCH(
     }
   }
 
-  if (body.specialisationIds !== undefined) {
-    if (!Array.isArray(body.specialisationIds)) {
+  if (body.specialisationDefinitionIds !== undefined) {
+    if (!Array.isArray(body.specialisationDefinitionIds)) {
       return NextResponse.json(
         { error: "specialisationIds must be an array" },
         { status: 400 },
       );
     }
-    const specs = await prisma.specialisation.findMany({
-      where: { id: { in: body.specialisationIds } },
+    const specs = await prisma.specialisationDefinition.findMany({
+      where: { id: { in: body.specialisationDefinitionIds } },
       select: { id: true },
     });
-    if (specs.length !== body.specialisationIds.length) {
+    if (specs.length !== body.specialisationDefinitionIds.length) {
       return NextResponse.json(
         { error: "One or more specialisation ids are invalid" },
         { status: 400 },
@@ -144,16 +145,22 @@ export async function PATCH(
         ...(body.qualifications !== undefined && {
           qualifications: body.qualifications?.trim() || null,
         }),
-        ...(body.languageIds !== undefined &&
-          body.languageIds !== null && {
+        ...(body.languageDefinitionIds !== undefined &&
+          body.languageDefinitionIds !== null && {
             languages: {
-              set: body.languageIds.map((id) => ({ id })),
+              deleteMany: {},
+              create: body.languageDefinitionIds.map((id) => ({
+                languageDefinitionId: id,
+              })),
             },
           }),
-        ...(body.specialisationIds !== undefined &&
-          body.specialisationIds !== null && {
+        ...(body.specialisationDefinitionIds !== undefined &&
+          body.specialisationDefinitionIds !== null && {
             specialisations: {
-              set: body.specialisationIds.map((id) => ({ id })),
+              deleteMany: {},
+              create: body.specialisationDefinitionIds.map((id) => ({
+                specialisationDefinitionId: id,
+              })),
             },
           }),
       },
@@ -166,8 +173,14 @@ export async function PATCH(
     where: { id: workerId },
     include: {
       user: { select: { id: true, name: true, email: true } },
-      languages: { select: { id: true, name: true } },
-      specialisations: { select: { id: true, name: true } },
+      languages: {
+        select: { languageDefinition: { select: { id: true, name: true } } },
+      },
+      specialisations: {
+        select: {
+          specialisationDefinition: { select: { id: true, name: true } },
+        },
+      },
     },
   });
 
@@ -183,8 +196,10 @@ export async function PATCH(
       email: worker.user.email,
       bio: worker.bio,
       qualifications: worker.qualifications,
-      languages: worker.languages,
-      specialisations: worker.specialisations,
+      languages: worker.languages.map((l) => l.languageDefinition),
+      specialisations: worker.specialisations.map(
+        (s) => s.specialisationDefinition,
+      ),
     },
   });
 }

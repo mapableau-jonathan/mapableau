@@ -1,10 +1,18 @@
 import type { DayOfWeek } from "@prisma/client";
 
-// todo: use prisma client types
-
-export type ProviderWithRelations = {
+export type Provider = {
   id: string;
   name: string;
+  address: {
+    id: string;
+    addressString: string;
+    street: string | null;
+    suburb: string | null;
+    city: string | null;
+    state: string | null;
+    postcode: string | null;
+    country: string | null;
+  };
   logoUrl: string | null;
   description: string | null;
   website: string | null;
@@ -17,7 +25,7 @@ export type ProviderWithRelations = {
   rating: number | null;
   reviewCount: number;
   serviceAreas: string[];
-  specialisations: string[];
+  specialisations: { id: string; name: string }[];
   services: {
     id: string;
     name: string;
@@ -25,17 +33,20 @@ export type ProviderWithRelations = {
   }[];
   locations: {
     id: string;
-    address: string;
-    city: string | null;
-    state: string | null;
-    postcode: string | null;
-    country: string | null;
+    address: {
+      street: string;
+      suburb: string | null;
+      city: string | null;
+      state: string | null;
+      postcode: string | null;
+      country: string | null;
+    } | null;
   }[];
   businessHours: {
     id: string;
     dayOfWeek: DayOfWeek;
-    openTime: string;
-    closeTime: string;
+    openTime: Date;
+    closeTime: Date;
   }[];
   workers?: {
     id: string;

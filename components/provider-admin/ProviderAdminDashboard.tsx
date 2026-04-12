@@ -3,7 +3,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { signOut, useSession } from "next-auth/react";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import type { MultiValue, StylesConfig } from "react-select";
+import Select from "react-select";
 
 import { cn } from "@/app/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -17,10 +20,91 @@ import {
 import {
   GetAdminResponse,
   GetCatalogResponse,
+  PatchProviderPayload,
+  patchProviderPayloadSchema,
+  PatchWorkerPayload,
 } from "@/schemas/provider-admin.types";
 
 const inputClass =
   "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+type ProviderSpecOption = { value: string; label: string };
+
+const providerSpecSelectStyles: StylesConfig<ProviderSpecOption, true> = {
+  control: (base, state) => ({
+    ...base,
+    minHeight: "42px",
+    borderRadius: "0.5rem",
+    borderColor: "hsl(var(--input))",
+    backgroundColor: "hsl(var(--background))",
+    boxShadow: state.isFocused
+      ? "0 0 0 2px hsl(var(--ring) / 0.25)"
+      : "0 1px 2px 0 rgb(0 0 0 / 0.05)",
+    "&:hover": { borderColor: "hsl(var(--input))" },
+  }),
+  menu: (base) => ({
+    ...base,
+    borderRadius: "0.5rem",
+    border: "1px solid hsl(var(--border))",
+    backgroundColor: "hsl(var(--popover))",
+    zIndex: 50,
+    boxShadow:
+      "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)",
+  }),
+  menuList: (base) => ({ ...base, padding: "0.25rem" }),
+  multiValue: (base) => ({
+    ...base,
+    borderRadius: "0.375rem",
+    backgroundColor: "hsl(var(--muted))",
+  }),
+  multiValueLabel: (base) => ({
+    ...base,
+    color: "hsl(var(--foreground))",
+    fontSize: "0.875rem",
+  }),
+  multiValueRemove: (base) => ({
+    ...base,
+    color: "hsl(var(--muted-foreground))",
+    ":hover": {
+      backgroundColor: "hsl(var(--destructive) / 0.12)",
+      color: "hsl(var(--destructive))",
+    },
+  }),
+  option: (base, state) => ({
+    ...base,
+    fontSize: "0.875rem",
+    cursor: "pointer",
+    backgroundColor: state.isSelected
+      ? "hsl(var(--primary) / 0.15)"
+      : state.isFocused
+        ? "hsl(var(--muted))"
+        : "transparent",
+    color: "hsl(var(--foreground))",
+  }),
+  input: (base) => ({ ...base, color: "hsl(var(--foreground))" }),
+  placeholder: (base) => ({
+    ...base,
+    color: "hsl(var(--muted-foreground))",
+    fontSize: "0.875rem",
+  }),
+  singleValue: (base) => ({ ...base, color: "hsl(var(--foreground))" }),
+  indicatorSeparator: (base) => ({
+    ...base,
+    backgroundColor: "hsl(var(--border))",
+  }),
+  dropdownIndicator: (base) => ({
+    ...base,
+    color: "hsl(var(--muted-foreground))",
+  }),
+  clearIndicator: (base) => ({
+    ...base,
+    color: "hsl(var(--muted-foreground))",
+  }),
+};
+
+function serviceAreasListToLines(serviceAreas: string[]) {
+  return serviceAreas.map((s) => `${s}`).join("\n");
+}
 
 function linesToList(text: string) {
   return text
@@ -29,8 +113,71 @@ function linesToList(text: string) {
     .filter(Boolean);
 }
 
-function listToLines(list: string[]) {
-  return list.join("\n");
+type OrgFormValues = {
+  name: string;
+  logoUrl: string;
+  description: string;
+  website: string;
+  email: string;
+  phone: string;
+  abn: string;
+  businessType: string;
+  ndisRegistered: boolean;
+  ndisNumber: string;
+  serviceAreas: string;
+  providerSpecialisationIds: string[];
+};
+
+function providerToFormValues(
+  provider: GetAdminResponse["provider"],
+): OrgFormValues {
+  return {
+    name: provider.name,
+    logoUrl: provider.logoUrl ?? "",
+    description: provider.description ?? "",
+    website: provider.website ?? "",
+    email: provider.email ?? "",
+    phone: provider.phone ?? "",
+    abn: provider.abn ?? "",
+    businessType: provider.businessType ?? "",
+    ndisRegistered: provider.ndisRegistered,
+    ndisNumber: provider.ndisNumber ?? "",
+    serviceAreas: serviceAreasListToLines(provider.serviceAreas),
+    providerSpecialisationIds: provider.specialisations.map((s) => s.id),
+  };
+}
+
+function formValuesToPatchPayload(
+  values: OrgFormValues,
+  catalog: GetCatalogResponse,
+): PatchProviderPayload {
+  const serviceAreas = linesToList(values.serviceAreas);
+  const byId = new Map(
+    catalog.providerSpecialisations.map((d) => [d.id, d] as const),
+  );
+  const specialisations: { id: string; name: string }[] =
+    values.providerSpecialisationIds.map((id) => {
+      const def = byId.get(id);
+      if (!def) {
+        throw new Error(`Unknown provider specialisation id: ${id}`);
+      }
+      return { id: def.id, name: def.name };
+    });
+
+  return {
+    name: values.name.trim() || null,
+    logoUrl: values.logoUrl.trim() || null,
+    description: values.description.trim() || null,
+    website: values.website.trim() || null,
+    email: values.email.trim() || null,
+    phone: values.phone.trim() || null,
+    abn: values.abn.trim() || null,
+    businessType: values.businessType.trim() || null,
+    ndisRegistered: values.ndisRegistered,
+    ndisNumber: values.ndisNumber.trim() || null,
+    serviceAreas: serviceAreas,
+    specialisations: specialisations,
+  };
 }
 
 export function ProviderAdminDashboard({
@@ -80,35 +227,28 @@ export function ProviderAdminDashboard({
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
 
-  const p = adminQuery.data?.provider;
   const canEditOrg = adminQuery.data?.canEditOrganization ?? false;
 
-  const [orgDraft, setOrgDraft] = useState<GetAdminResponse["provider"] | null>(
-    null,
-  );
-  const orgSyncedForProvider = useRef<string | null>(null);
+  const orgForm = useForm<OrgFormValues>({
+    defaultValues: providerToFormValues(adminPayload.provider),
+  });
 
-  useEffect(() => {
-    orgSyncedForProvider.current = null;
-  }, [providerId]);
-
-  useEffect(() => {
-    const id = adminQuery.data?.provider?.id;
-    if (!id || orgSyncedForProvider.current === providerId) return;
-    orgSyncedForProvider.current = providerId;
-    setOrgDraft(adminQuery.data!.provider);
-  }, [providerId, adminQuery.data]);
-
-  const displayOrg = orgDraft ?? p;
-
+  const { reset, register, handleSubmit, control } = orgForm;
   const orgMutation = useMutation({
-    mutationFn: async (body: Record<string, unknown>) => {
+    mutationFn: async (body: PatchProviderPayload) => {
+      const validated = patchProviderPayloadSchema.safeParse(body);
+      if (!validated.success) {
+        throw new Error("Invalid payload");
+      }
+
       const res = await fetch(`/api/provider-admin/${providerId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify(validated.data),
       });
-      const data = await res.json().catch(() => ({}));
+      const data = await res
+        .json()
+        .catch(() => new Error("Failed to parse response"));
       if (!res.ok) {
         throw new Error(
           typeof data.error === "string" ? data.error : "Save failed",
@@ -117,8 +257,8 @@ export function ProviderAdminDashboard({
       return data as { provider: GetAdminResponse["provider"] };
     },
     onSuccess: (data) => {
-      setOrgDraft(data.provider);
       setOrgMessage({ ok: true, text: "Saved organisation details." });
+      reset(providerToFormValues(data.provider));
       void queryClient.invalidateQueries({
         queryKey: ["provider-admin", providerId],
       });
@@ -157,6 +297,8 @@ export function ProviderAdminDashboard({
       </div>
     );
   }
+
+  const p = adminQuery.data.provider;
 
   return (
     <div className="min-h-screen bg-background">
@@ -227,7 +369,7 @@ export function ProviderAdminDashboard({
           ))}
         </nav>
 
-        {tab === "org" && displayOrg && (
+        {tab === "org" && (
           <Card>
             <CardHeader>
               <CardTitle>Organisation details</CardTitle>
@@ -246,172 +388,190 @@ export function ProviderAdminDashboard({
                   {orgMessage.text}
                 </p>
               )}
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field
-                  label="Name"
-                  value={displayOrg.name}
-                  disabled={!canEditOrg}
-                  onChange={(v) =>
-                    setOrgDraft((d) => (d ? { ...d, name: v } : null))
-                  }
-                />
-                <Field
-                  label="Logo URL"
-                  value={displayOrg.logoUrl ?? ""}
-                  disabled={!canEditOrg}
-                  onChange={(v) =>
-                    setOrgDraft((d) =>
-                      d ? { ...d, logoUrl: v || null } : null,
-                    )
-                  }
-                />
-                <Field
-                  label="Email"
-                  value={displayOrg.email ?? ""}
-                  disabled={!canEditOrg}
-                  onChange={(v) =>
-                    setOrgDraft((d) => (d ? { ...d, email: v || null } : null))
-                  }
-                />
-                <Field
-                  label="Phone"
-                  value={displayOrg.phone ?? ""}
-                  disabled={!canEditOrg}
-                  onChange={(v) =>
-                    setOrgDraft((d) => (d ? { ...d, phone: v || null } : null))
-                  }
-                />
-                <Field
-                  label="Website"
-                  value={displayOrg.website ?? ""}
-                  disabled={!canEditOrg}
-                  onChange={(v) =>
-                    setOrgDraft((d) =>
-                      d ? { ...d, website: v || null } : null,
-                    )
-                  }
-                />
-                <Field
-                  label="ABN"
-                  value={displayOrg.abn ?? ""}
-                  disabled={!canEditOrg}
-                  onChange={(v) =>
-                    setOrgDraft((d) => (d ? { ...d, abn: v || null } : null))
-                  }
-                />
-                <Field
-                  label="Business type"
-                  value={displayOrg.businessType ?? ""}
-                  disabled={!canEditOrg}
-                  onChange={(v) =>
-                    setOrgDraft((d) =>
-                      d ? { ...d, businessType: v || null } : null,
-                    )
-                  }
-                />
-                <Field
-                  label="NDIS registration #"
-                  value={displayOrg.ndisNumber ?? ""}
-                  disabled={!canEditOrg}
-                  onChange={(v) =>
-                    setOrgDraft((d) =>
-                      d ? { ...d, ndisNumber: v || null } : null,
-                    )
-                  }
-                />
-              </div>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="size-4 rounded border-input"
-                  checked={displayOrg.ndisRegistered}
-                  disabled={!canEditOrg}
-                  onChange={(e) =>
-                    setOrgDraft((d) =>
-                      d ? { ...d, ndisRegistered: e.target.checked } : null,
-                    )
-                  }
-                />
-                NDIS registered
-              </label>
-              <label className="block space-y-1.5">
-                <span className="text-sm font-medium">Description</span>
-                <textarea
-                  className={cn(inputClass, "min-h-[100px]")}
-                  value={displayOrg.description ?? ""}
-                  disabled={!canEditOrg}
-                  onChange={(e) =>
-                    setOrgDraft((d) =>
-                      d ? { ...d, description: e.target.value || null } : null,
-                    )
-                  }
-                />
-              </label>
-              <label className="block space-y-1.5">
-                <span className="text-sm font-medium">
-                  Service areas (one per line)
-                </span>
-                <textarea
-                  className={cn(inputClass, "min-h-[80px]")}
-                  value={listToLines(displayOrg.serviceAreas)}
-                  disabled={!canEditOrg}
-                  onChange={(e) =>
-                    setOrgDraft((d) =>
-                      d
-                        ? { ...d, serviceAreas: linesToList(e.target.value) }
-                        : null,
-                    )
-                  }
-                />
-              </label>
-              <label className="block space-y-1.5">
-                <span className="text-sm font-medium">
-                  Specialisations (one per line)
-                </span>
-                <textarea
-                  className={cn(inputClass, "min-h-[80px]")}
-                  value={listToLines(displayOrg.specialisations)}
-                  disabled={!canEditOrg}
-                  onChange={(e) =>
-                    setOrgDraft((d) =>
-                      d
-                        ? {
-                            ...d,
-                            specialisations: linesToList(e.target.value),
-                          }
-                        : null,
-                    )
-                  }
-                />
-              </label>
-              {canEditOrg && (
-                <Button
-                  variant="default"
-                  size="default"
-                  loading={orgMutation.isPending}
-                  type="button"
-                  onClick={() => {
-                    setOrgMessage(null);
-                    if (!orgDraft) return;
-                    orgMutation.mutate({
-                      name: orgDraft.name,
-                      logoUrl: orgDraft.logoUrl,
-                      description: orgDraft.description,
-                      website: orgDraft.website,
-                      email: orgDraft.email,
-                      phone: orgDraft.phone,
-                      abn: orgDraft.abn,
-                      businessType: orgDraft.businessType,
-                      ndisRegistered: orgDraft.ndisRegistered,
-                      ndisNumber: orgDraft.ndisNumber,
-                      serviceAreas: orgDraft.serviceAreas,
-                      specialisations: orgDraft.specialisations,
+              <form
+                className="space-y-4"
+                onSubmit={handleSubmit((values) => {
+                  setOrgMessage(null);
+                  if (!values.name.trim()) {
+                    setOrgMessage({
+                      ok: false,
+                      text: "Name cannot be empty.",
                     });
-                  }}
-                >
-                  Save organisation
-                </Button>
-              )}
+                    return;
+                  }
+                  const catalog = catalogQuery.data ?? adminCatalog;
+                  try {
+                    orgMutation.mutate(
+                      formValuesToPatchPayload(values, catalog),
+                    );
+                  } catch (e) {
+                    setOrgMessage({
+                      ok: false,
+                      text:
+                        e instanceof Error ? e.message : "Invalid form data.",
+                    });
+                  }
+                })}
+              >
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="block space-y-1.5">
+                    <span className="text-sm font-medium">Name</span>
+                    <input
+                      className={inputClass}
+                      disabled={!canEditOrg}
+                      {...register("name")}
+                    />
+                  </label>
+                  <label className="block space-y-1.5">
+                    <span className="text-sm font-medium">Logo URL</span>
+                    <input
+                      className={inputClass}
+                      disabled={!canEditOrg}
+                      {...register("logoUrl")}
+                    />
+                  </label>
+                  <label className="block space-y-1.5">
+                    <span className="text-sm font-medium">Email</span>
+                    <input
+                      className={inputClass}
+                      disabled={!canEditOrg}
+                      {...register("email")}
+                    />
+                  </label>
+                  <label className="block space-y-1.5">
+                    <span className="text-sm font-medium">Phone</span>
+                    <input
+                      className={inputClass}
+                      disabled={!canEditOrg}
+                      {...register("phone")}
+                    />
+                  </label>
+                  <label className="block space-y-1.5">
+                    <span className="text-sm font-medium">Website</span>
+                    <input
+                      className={inputClass}
+                      disabled={!canEditOrg}
+                      {...register("website")}
+                    />
+                  </label>
+                  <label className="block space-y-1.5">
+                    <span className="text-sm font-medium">ABN</span>
+                    <input
+                      className={inputClass}
+                      disabled={!canEditOrg}
+                      {...register("abn")}
+                    />
+                  </label>
+                  <label className="block space-y-1.5">
+                    <span className="text-sm font-medium">Business type</span>
+                    <input
+                      className={inputClass}
+                      disabled={!canEditOrg}
+                      {...register("businessType")}
+                    />
+                  </label>
+                  <label className="block space-y-1.5">
+                    <span className="text-sm font-medium">
+                      NDIS registration #
+                    </span>
+                    <input
+                      className={inputClass}
+                      disabled={!canEditOrg}
+                      {...register("ndisNumber")}
+                    />
+                  </label>
+                </div>
+                <Controller
+                  name="ndisRegistered"
+                  control={control}
+                  render={({ field }) => (
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="size-4 rounded border-input"
+                        disabled={!canEditOrg}
+                        checked={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        ref={field.ref}
+                      />
+                      NDIS registered
+                    </label>
+                  )}
+                />
+                <label className="block space-y-1.5">
+                  <span className="text-sm font-medium">Description</span>
+                  <textarea
+                    className={cn(inputClass, "min-h-[100px]")}
+                    disabled={!canEditOrg}
+                    {...register("description")}
+                  />
+                </label>
+                <label className="block space-y-1.5">
+                  <span className="text-sm font-medium">
+                    Service areas (one per line)
+                  </span>
+                  <textarea
+                    className={cn(inputClass, "min-h-[80px]")}
+                    disabled={!canEditOrg}
+                    {...register("serviceAreas")}
+                  />
+                </label>
+                <div className="block space-y-1.5">
+                  <span className="text-sm font-medium">Specialisations</span>
+                  <Controller
+                    name="providerSpecialisationIds"
+                    control={control}
+                    render={({ field }) => {
+                      const catalog = catalogQuery.data ?? adminCatalog;
+                      const options: ProviderSpecOption[] =
+                        catalog.providerSpecialisations.map((s) => ({
+                          value: s.id,
+                          label: s.name,
+                        }));
+                      const selected: MultiValue<ProviderSpecOption> =
+                        options.filter((o) => field.value.includes(o.value));
+                      return (
+                        <Select<ProviderSpecOption, true>
+                          instanceId="provider-org-specialisations"
+                          isMulti
+                          isClearable
+                          closeMenuOnSelect={false}
+                          isDisabled={!canEditOrg}
+                          options={options}
+                          value={selected}
+                          onChange={(next) => {
+                            field.onChange(
+                              next ? next.map((o) => o.value) : [],
+                            );
+                          }}
+                          onBlur={field.onBlur}
+                          placeholder="Search and select specialisations…"
+                          noOptionsMessage={() => "No matches"}
+                          styles={providerSpecSelectStyles}
+                          classNamePrefix="provider-spec-select"
+                        />
+                      );
+                    }}
+                  />
+                  {catalogQuery.isLoading &&
+                  adminCatalog.providerSpecialisations.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      Loading catalogue…
+                    </p>
+                  ) : null}
+                </div>
+                {canEditOrg && (
+                  <Button
+                    variant="default"
+                    size="default"
+                    loading={orgMutation.isPending}
+                    type="submit"
+                  >
+                    Save organisation
+                  </Button>
+                )}
+              </form>
             </CardContent>
           </Card>
         )}
@@ -514,9 +674,9 @@ function WorkerCard({
             name: name.trim() || null,
             bio: bio.trim() || null,
             qualifications: quals.trim() || null,
-            languageIds: langIds,
-            specialisationIds: specIds,
-          }),
+            languageDefinitionIds: langIds,
+            specialisationDefinitionIds: specIds,
+          } satisfies PatchWorkerPayload),
         },
       );
       const data = await res.json().catch(() => ({}));
@@ -533,14 +693,6 @@ function WorkerCard({
     },
     onError: (e: Error) => setMsg({ ok: false, text: e.message }),
   });
-
-  useEffect(() => {
-    setName(worker.name ?? "");
-    setBio(worker.bio ?? "");
-    setQuals(worker.qualifications ?? "");
-    setLangIds(worker.languages.map((l) => l.id));
-    setSpecIds(worker.specialisations.map((s) => s.id));
-  }, [worker]);
 
   return (
     <Card>

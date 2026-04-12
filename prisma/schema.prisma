@@ -17,7 +17,9 @@ datasource db {
 
 model Address {
   id       String  @id @default(uuid())
-  street   String
+  addressString String
+  formatted String? // full display string from Google, etc.
+  street   String?
   suburb   String?
   city     String?
   state    String?
@@ -27,14 +29,15 @@ model Address {
   latitude  Float?
   longitude Float?
 
-  formatted String? // full display string from Google, etc.
-
   createdAt DateTime @default(now())
 
   providers              Provider[]
   providerOutlets        ProviderOutlet[]
   serviceLocations       ProviderServiceLocation[]
   outletServiceLocations ProviderOutletServiceLocation[]
+
+  @@index([latitude, longitude])
+  @@index([longitude])
 }
 
 model User {
@@ -58,7 +61,7 @@ model Worker {
 
   bio             String?
   qualifications  String?
-  languages       Language[]
+  languages       WorkerLanguage[]
   availability    WorkerAvailability[]
   specialisations WorkerSpecialisation[]
 
@@ -67,32 +70,56 @@ model Worker {
 
   providers   ProviderWorker[]
   outletLinks ProviderOutletWorker[]
-
-  @@index([userId])
 }
 
-model Language {
+model LanguageDefinition {
   id      String   @id @default(uuid())
   name    String
-  workers Worker[]
+  workers WorkerLanguage[]
+}
+
+model WorkerLanguage {
+  id         String   @id @default(uuid())
+  workerId   String
+  languageDefinitionId String
+
+  worker   Worker   @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  languageDefinition LanguageDefinition @relation(fields: [languageDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([workerId, languageDefinitionId])
+  @@index([languageDefinitionId])
 }
 
 model WorkerAvailability {
   id        String    @id @default(uuid())
   workerId  String
   dayOfWeek DayOfWeek
-  startTime String
-  endTime   String
+  startTime DateTime @db.Time
+  endTime   DateTime @db.Time
 
   worker Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
 
   @@index([workerId])
 }
 
-model WorkerSpecialisation {
+model SpecialisationDefinition {
   id      String   @id @default(uuid())
-  name    String
-  workers Worker[]
+  name    String @unique
+  workers WorkerSpecialisation[]
+  providerSpecialisations ProviderSpecialisation[]
+  providerOutletSpecialisations ProviderOutletSpecialisation[]
+}
+
+model WorkerSpecialisation {
+  id         String   @id @default(uuid())
+  workerId String
+  specialisationDefinitionId String
+
+  worker Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  specialisationDefinition SpecialisationDefinition @relation(fields: [specialisationDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([workerId, specialisationDefinitionId])
+  @@index([specialisationDefinitionId])
 }
 
 model ClaimedProvider {
@@ -117,21 +144,33 @@ model ClaimedProvider {
 }
 
 model ProviderSpecialisation {
-  id        String     @id @default(uuid())
-  name      String
-  providers Provider[]
+  id         String   @id @default(uuid())
+  providerId String
+  specialisationDefinitionId String
+
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  specialisationDefinition SpecialisationDefinition @relation(fields: [specialisationDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, specialisationDefinitionId])
+  @@index([specialisationDefinitionId])
 }
 
 model ProviderOutletSpecialisation {
-  id              String           @id @default(uuid())
-  name            String
-  providerOutlets ProviderOutlet[]
+  id         String   @id @default(uuid())
+  providerOutletId String
+  specialisationDefinitionId String
+
+  providerOutlet ProviderOutlet @relation(fields: [providerOutletId], references: [id], onDelete: Cascade)
+  specialisationDefinition SpecialisationDefinition @relation(fields: [specialisationDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([providerOutletId, specialisationDefinitionId])
+  @@index([specialisationDefinitionId])
 }
 
 model Provider {
   id          String  @id @default(uuid())
   name        String
-  addressId   String?
+  addressId   String
   logoUrl     String?
   description String?
 
@@ -149,8 +188,8 @@ model Provider {
   reviewCount Int    @default(0)
 
   serviceAreas String[] @default([])
-
-  address         Address?                  @relation(fields: [addressId], references: [id], onDelete: SetNull)
+// todo: look at what should happen when onDelete triggers
+  address         Address                  @relation(fields: [addressId], references: [id], onDelete: SetNull)
   specialisations ProviderSpecialisation[]
   services        ProviderService[]
   locations       ProviderServiceLocation[]
@@ -158,17 +197,25 @@ model Provider {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  isActive Boolean @default(false)
+  isVerified Boolean @default(false)
+  search_vector Unsupported("tsvector")
 
   workers   ProviderWorker[]
   userRoles ProviderUserRole[]
   outlets   ProviderOutlet[]
+
+  @@index([search_vector])
+  @@index([addressId])
 }
 
 /// Physical or logical outlet under a provider (branch, site, listing).
 model ProviderOutlet {
   id           String   @id @default(uuid())
+  outletFingerprint         String
   name         String
   addressId    String?
+  logoUrl     String?
   description  String?
   website      String?
   email        String?
@@ -191,11 +238,16 @@ model ProviderOutlet {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  isActive Boolean @default(false)
+  isVerified Boolean @default(false)
+  search_vector Unsupported("tsvector")
 
   workers   ProviderOutletWorker[]
   userRoles ProviderOutletUserRole[]
 
+  @@unique([providerId, outletFingerprint])
   @@index([providerId])
+  @@index([search_vector])
 }
 
 model ProviderUserRole {
@@ -208,7 +260,8 @@ model ProviderUserRole {
   user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   provider Provider     @relation(fields: [providerId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, providerId]) // ensures a user has only one role per provider
+  @@unique([userId, providerId])
+  @@index([providerId])
 }
 
 /// User role scoped to a specific provider outlet (mirrors ProviderUserRole).
@@ -223,6 +276,7 @@ model ProviderOutletUserRole {
   providerOutlet ProviderOutlet @relation(fields: [providerOutletId], references: [id], onDelete: Cascade)
 
   @@unique([userId, providerOutletId])
+  @@index([providerOutletId])
 }
 
 model ServiceDefinition {
@@ -237,7 +291,7 @@ model ServiceDefinition {
 }
 
 model ProviderService {
-  id                  String @id @default(uuid())
+  id                  String   @id @default(uuid())
   serviceDefinitionId String
   providerId          String
 
@@ -249,7 +303,7 @@ model ProviderService {
 }
 
 model ProviderOutletService {
-  id                  String @id @default(uuid())
+  id                  String   @id @default(uuid())
   serviceDefinitionId String
   providerOutletId    String
 
@@ -261,7 +315,7 @@ model ProviderOutletService {
 }
 
 model ProviderServiceLocation {
-  id         String @id @default(uuid())
+  id         String   @id @default(uuid())
   addressId  String
   providerId String
 
@@ -269,11 +323,11 @@ model ProviderServiceLocation {
   provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
 
   @@unique([providerId, addressId])
-  @@index([providerId])
+  @@index([addressId])
 }
 
 model ProviderOutletServiceLocation {
-  id               String @id @default(uuid())
+  id               String   @id @default(uuid())
   addressId        String
   providerOutletId String
 
@@ -281,14 +335,14 @@ model ProviderOutletServiceLocation {
   providerOutlet ProviderOutlet @relation(fields: [providerOutletId], references: [id], onDelete: Cascade)
 
   @@unique([providerOutletId, addressId])
-  @@index([providerOutletId])
+  @@index([addressId])
 }
 
 model ProviderBusinessHour {
   id         String    @id @default(uuid())
   dayOfWeek  DayOfWeek
-  openTime   String
-  closeTime  String
+  openTime   DateTime @db.Time
+  closeTime  DateTime @db.Time
   providerId String
 
   provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
@@ -299,8 +353,8 @@ model ProviderBusinessHour {
 model ProviderOutletBusinessHour {
   id               String    @id @default(uuid())
   dayOfWeek        DayOfWeek
-  openTime         String
-  closeTime        String
+  openTime         DateTime @db.Time
+  closeTime        DateTime @db.Time
   providerOutletId String
 
   providerOutlet ProviderOutlet @relation(fields: [providerOutletId], references: [id], onDelete: Cascade)
@@ -309,7 +363,7 @@ model ProviderOutletBusinessHour {
 }
 
 model ProviderWorker {
-  id         String @id @default(uuid())
+  id         String   @id @default(uuid())
   workerId   String
   providerId String
 
@@ -320,11 +374,12 @@ model ProviderWorker {
   endDate   DateTime?
 
   @@unique([workerId, providerId])
+  @@index([providerId])
 }
 
 /// Worker assignment to a specific provider outlet (mirrors WorkerProvider).
 model ProviderOutletWorker {
-  id               String @id @default(uuid())
+  id               String   @id @default(uuid())
   workerId         String
   providerOutletId String
 
@@ -335,6 +390,7 @@ model ProviderOutletWorker {
   endDate   DateTime?
 
   @@unique([workerId, providerOutletId])
+  @@index([providerOutletId])
 }
 
 // todo: remove because we're using JWT

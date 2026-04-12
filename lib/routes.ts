@@ -14,14 +14,16 @@ const SLUG_MAX_LENGTH = 100;
  * - Lowercase, trim, replace spaces with hyphens, strip non-alphanumeric (except -)
  */
 export function slugify(input: string): string {
-  return input
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "")
-    .slice(0, SLUG_MAX_LENGTH)
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "") || "unknown";
+  return (
+    input
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9-]/g, "")
+      .slice(0, SLUG_MAX_LENGTH)
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "") || "unknown"
+  );
 }
 
 /** Validate a slug string. */
@@ -53,7 +55,8 @@ export const ROUTES = {
   providerFinder: "/provider-finder",
 
   /** Outlet profile (read-only, from JSON). Redirects to claimed if exists. */
-  outletProfile: (slug: string) => `/jonathan/profile/${encodeURIComponent(slug)}`,
+  outletProfile: (slug: string) =>
+    `/jonathan/profile/${encodeURIComponent(slug)}`,
 
   /** Claimed profile (editable, from DB) */
   claimedProfile: (slug: string) => `/profiles/${encodeURIComponent(slug)}`,
@@ -75,7 +78,8 @@ export const API_ROUTES = {
     claimed: (outletKey: string) =>
       `/api/profiles/claimed?outletKey=${encodeURIComponent(outletKey)}`,
     profile: (slug: string) => `/api/profiles/${encodeURIComponent(slug)}`,
-    verify: (token: string) => `/api/profiles/verify?token=${encodeURIComponent(token)}`,
+    verify: (token: string) =>
+      `/api/profiles/verify?token=${encodeURIComponent(token)}`,
   },
 } as const;
 

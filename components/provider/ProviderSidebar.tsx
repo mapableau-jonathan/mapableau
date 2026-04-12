@@ -12,8 +12,9 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getDbTimeString } from "@/lib/dbTime";
 
-import type { ProviderWithRelations } from "./types";
+import { Provider } from "./types";
 
 const DAY_LABELS: Record<string, string> = {
   MONDAY: "Monday",
@@ -26,15 +27,20 @@ const DAY_LABELS: Record<string, string> = {
 };
 
 type ProviderSidebarProps = {
-  provider: ProviderWithRelations;
+  provider: Provider;
 };
 
-function formatLocation(provider: ProviderWithRelations): string | null {
-  const loc = provider.locations[0];
+function formatLocation(provider: Provider): string | null {
+  const loc = provider.address ?? null;
   if (!loc) return null;
-  const parts = [loc.address, loc.city, loc.state, loc.postcode].filter(
-    Boolean,
-  );
+  if (!loc.street || !loc.suburb) return loc.addressString;
+  const parts = [
+    loc.street,
+    loc.suburb,
+    loc.city,
+    loc.state,
+    loc.postcode,
+  ].filter(Boolean);
   return parts.length > 0 ? parts.join(", ") : null;
 }
 
@@ -113,7 +119,9 @@ export default function ProviderSidebar({ provider }: ProviderSidebarProps) {
                     {DAY_LABELS[bh.dayOfWeek] ?? bh.dayOfWeek}
                   </span>
                   <span>
-                    {bh.openTime} – {bh.closeTime}
+                    {/* todo: test */}
+                    {getDbTimeString(bh.openTime)} –{" "}
+                    {getDbTimeString(bh.closeTime)}
                   </span>
                 </span>
               ))}
@@ -153,7 +161,7 @@ export default function ProviderSidebar({ provider }: ProviderSidebarProps) {
           <CardContent>
             <ul className="space-y-2 text-sm text-muted-foreground">
               {provider.specialisations.map((spec, i) => (
-                <li key={i}>{spec}</li>
+                <li key={i}>{spec.name}</li>
               ))}
             </ul>
           </CardContent>

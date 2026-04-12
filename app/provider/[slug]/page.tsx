@@ -9,6 +9,7 @@ import ProviderReviews from "@/components/provider/ProviderReviews";
 import ProviderServices from "@/components/provider/ProviderServices";
 import ProviderSidebar from "@/components/provider/ProviderSidebar";
 import ProviderWorkers from "@/components/provider/ProviderWorkers";
+import { Provider } from "@/components/provider/types";
 import { prisma } from "@/lib/prisma";
 
 export const dynamicParams = true;
@@ -41,29 +42,90 @@ export default async function ProviderPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const provider = await prisma.provider.findUnique({
+  const providerData = await prisma.provider.findUnique({
     where: { id: slug },
     include: {
-      services: true,
-      locations: true,
+      address: true,
+      locations: {
+        include: {
+          address: true,
+        },
+      },
+      services: {
+        include: {
+          serviceDefinition: {
+            select: { id: true, name: true, description: true },
+          },
+        },
+      },
       businessHours: true,
       workers: {
         include: {
           worker: {
             include: {
               user: { select: { name: true } },
-              languages: true,
-              specialisations: true,
+              languages: {
+                select: {
+                  languageDefinition: { select: { id: true, name: true } },
+                },
+              },
+              specialisations: {
+                select: {
+                  specialisationDefinition: {
+                    select: { id: true, name: true },
+                  },
+                },
+              },
             },
+          },
+        },
+      },
+      specialisations: {
+        select: {
+          specialisationDefinition: {
+            select: { id: true, name: true },
           },
         },
       },
     },
   });
 
-  if (!provider) {
+  if (!providerData) {
     notFound();
   }
+
+  //  todo: better way of mapping these junction tables
+  const services = providerData.services.map((service) => ({
+    id: service.serviceDefinition.id,
+    name: service.serviceDefinition.name,
+    description: service.serviceDefinition.description,
+  }));
+
+  const specialisations = providerData.specialisations.map(
+    (s) => s.specialisationDefinition,
+  );
+
+  const workers = providerData.workers.map((w) => ({
+    id: w.worker.id,
+    worker: {
+      ...w.worker,
+      specialisations: w.worker.specialisations.map(
+        (s) => s.specialisationDefinition,
+      ),
+      languages: w.worker.languages.map((l) => l.languageDefinition),
+    },
+  }));
+
+  // const t= providerData.address.addressString;
+  // const a = providerData.address;
+
+  // todo: fix this error address.street can be null?
+  const provider: any = {
+    ...providerData,
+    specialisations,
+    services,
+    workers,
+  };
 
   return (
     <ProviderLayout sidebar={<ProviderSidebar provider={provider} />}>

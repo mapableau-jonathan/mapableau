@@ -13,9 +13,12 @@ import {
   Users,
 } from "lucide-react";
 
-import type { ProviderWithRelations } from "./types";
+import type { Provider } from "./types";
 
-const SERVICE_NAME_TO_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
+const SERVICE_NAME_TO_ICON: Record<
+  string,
+  React.ComponentType<{ className?: string }>
+> = {
   "Supported Independent Living": Home,
   "Community Participation": Users,
   "Plan Management": FileText,
@@ -23,14 +26,14 @@ const SERVICE_NAME_TO_ICON: Record<string, React.ComponentType<{ className?: str
   "Assistive Technology": Accessibility,
   "Capacity Building": GraduationCap,
   "Daily Living Support": Home,
-  "Transport": Car,
+  Transport: Car,
   "Social & Community Participation": Users,
-  "Physiotherapy": Activity,
+  Physiotherapy: Activity,
   "Occupational Therapy": Briefcase,
   "Speech Pathology": MessageCircle,
   "Community Access": MapPin,
   "In-Home Support": Home,
-  "Respite": BedDouble,
+  Respite: BedDouble,
 };
 
 function getServiceIcon(serviceName: string) {
@@ -38,7 +41,7 @@ function getServiceIcon(serviceName: string) {
 }
 
 type ProviderServicesProps = {
-  provider: ProviderWithRelations;
+  provider: Provider;
 };
 
 export default function ProviderServices({ provider }: ProviderServicesProps) {

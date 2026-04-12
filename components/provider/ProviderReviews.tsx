@@ -1,9 +1,9 @@
 import { MessageSquare } from "lucide-react";
 
-import type { ProviderWithRelations } from "./types";
+import type { Provider } from "./types";
 
 type ProviderReviewsProps = {
-  provider: ProviderWithRelations;
+  provider: Provider;
 };
 
 // todo: implement reviews

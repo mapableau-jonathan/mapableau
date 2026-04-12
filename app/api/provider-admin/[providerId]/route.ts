@@ -58,7 +58,9 @@ export async function GET(
       ndisRegistered: provider.ndisRegistered,
       ndisNumber: provider.ndisNumber,
       serviceAreas: provider.serviceAreas,
-      specialisations: provider.specialisations,
+      specialisations: provider.specialisations.map(
+        (s) => s.specialisationDefinition,
+      ),
     },
     workers: provider.workers.map((wp) => ({
       id: wp.worker.id,
@@ -67,8 +69,10 @@ export async function GET(
       email: wp.worker.user.email,
       bio: wp.worker.bio,
       qualifications: wp.worker.qualifications,
-      languages: wp.worker.languages,
-      specialisations: wp.worker.specialisations,
+      languages: wp.worker.languages.map((l) => l.languageDefinition),
+      specialisations: wp.worker.specialisations.map(
+        (s) => s.specialisationDefinition,
+      ),
     })),
   } satisfies GetAdminResponse);
 }
@@ -150,13 +154,19 @@ export async function PATCH(
   if (body.specialisations !== undefined) {
     if (!Array.isArray(body.specialisations)) {
       return NextResponse.json(
-        { error: "specialisations must be an array of strings" },
+        { error: "specialisations must be an array" },
         { status: 400 },
       );
     }
-    data.specialisations = body.specialisations
-      .map((s) => String(s).trim())
-      .filter(Boolean);
+    // todo: check if this is correct
+    data.specialisations = {
+      deleteMany: {},
+      create: body.specialisations
+        .filter((s) => s.id.trim())
+        .map((s) => ({
+          specialisationDefinitionId: s.id,
+        })),
+    };
   }
 
   if (Object.keys(data).length === 0) {
@@ -169,6 +179,15 @@ export async function PATCH(
   const updated = await prisma.provider.update({
     where: { id: providerId },
     data,
+    include: {
+      specialisations: {
+        select: {
+          specialisationDefinition: {
+            select: { id: true, name: true },
+          },
+        },
+      },
+    },
   });
 
   revalidatePath(`/provider/${providerId}`);
@@ -188,7 +207,9 @@ export async function PATCH(
       ndisRegistered: updated.ndisRegistered,
       ndisNumber: updated.ndisNumber,
       serviceAreas: updated.serviceAreas,
-      specialisations: updated.specialisations,
+      specialisations: updated.specialisations.map(
+        (s) => s.specialisationDefinition,
+      ),
     },
   } satisfies PatchProviderResponse);
 }

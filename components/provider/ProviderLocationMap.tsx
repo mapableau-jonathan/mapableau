@@ -2,18 +2,12 @@
 
 import L, { latLngBounds } from "leaflet";
 import { useEffect } from "react";
-import {
-  MapContainer,
-  TileLayer,
-  Marker,
-  Popup,
-  useMap,
-} from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
 import { getLocationCoords } from "@/lib/locationCoords";
 
-import type { ProviderWithRelations } from "./types";
+import type { Provider } from "./types";
 
 const markerIcon = L.divIcon({
   className: "provider-location-marker",
@@ -49,7 +43,7 @@ function FitBounds({
 }
 
 type ProviderLocationMapProps = {
-  provider: ProviderWithRelations;
+  provider: Provider;
 };
 
 export default function ProviderLocationMap({
@@ -57,9 +51,21 @@ export default function ProviderLocationMap({
 }: ProviderLocationMapProps) {
   const markers = provider.locations
     .map((loc) => {
-      const coords = getLocationCoords(loc.city, loc.state, loc.address);
+      const address = loc.address ?? null;
+      if (!address) return null;
+      const coords = getLocationCoords(
+        address.city,
+        address.state,
+        address.street,
+      );
       if (!coords) return null;
-      const label = [loc.address, loc.city, loc.state]
+      const label = [
+        address.street,
+        address.suburb,
+        address.city,
+        address.state,
+        address.postcode,
+      ]
         .filter(Boolean)
         .join(", ");
       return { coords, label };
@@ -95,13 +101,21 @@ export default function ProviderLocationMap({
         </div>
       </div>
       <ul className="space-y-1 text-sm text-muted-foreground">
-        {provider.locations.map((loc) => (
-          <li key={loc.id}>
-            {[loc.address, loc.city, loc.state, loc.postcode]
-              .filter(Boolean)
-              .join(", ")}
-          </li>
-        ))}
+        {provider.locations.map((loc) => {
+          const address = loc.address ?? null;
+          if (!address) return null;
+          return (
+            <li key={loc.id}>
+              {[
+                address.street,
+                address.suburb,
+                address.city,
+                address.state,
+                address.postcode,
+              ].join(", ")}
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

@@ -12,7 +12,7 @@ export default function Page() {
   return (
     <main>
       <h1>My Map</h1>
-      <Map />
+      <Map providers={[]} providerOutlets={[]} />
     </main>
   );
 }

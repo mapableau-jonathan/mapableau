@@ -35,6 +35,7 @@ export default async function ProviderAdminProviderPage({
   params: Promise<{ providerId: string }>;
 }) {
   const userId = await getSessionUserId();
+  console.log("userId", userId);
   if (!userId) {
     const { providerId } = await params;
     redirect(
@@ -43,25 +44,26 @@ export default async function ProviderAdminProviderPage({
   }
 
   const { providerId } = await params;
+  console.log("providerId", providerId);
   if (!isValidProviderId(providerId)) {
+    console.log("invalid providerId");
     notFound();
   }
 
   const membership = await getProviderMembership(userId, providerId);
   if (!membership) {
+    console.log("no membership");
     notFound();
   }
 
   const provider = await getProviderWithWorkers(providerId);
   if (!provider) {
+    console.log("no provider");
     notFound();
   }
 
   const adminPayload = getAdminResponse(membership, provider);
   const adminCatalog = await getAdminCatalog();
-
-  console.log("adminPayload", adminPayload);
-  console.log("adminCatalog", adminCatalog);
 
   return (
     <ProviderAdminDashboard
