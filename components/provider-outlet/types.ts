@@ -1,7 +1,9 @@
 import type { DayOfWeek } from "@prisma/client";
 
-export type Provider = {
+export type ProviderOutlet = {
   id: string;
+  outletFingerprint: string;
+  providerId: string;
   name: string;
   address: {
     id: string;
@@ -12,7 +14,7 @@ export type Provider = {
     state: string | null;
     postcode: string | null;
     country: string | null;
-  };
+  } | null;
   logoUrl: string | null;
   description: string | null;
   website: string | null;
@@ -20,7 +22,6 @@ export type Provider = {
   phone: string | null;
   abn: string | null;
   businessType: string | null;
-  ndisRegistered: boolean;
   ndisNumber: string | null;
   rating: number | null;
   reviewCount: number;
@@ -34,9 +35,9 @@ export type Provider = {
   locations: {
     id: string;
     address: {
+      addressString: string;
       latitude: number | null;
       longitude: number | null;
-      addressString: string;
       street: string | null;
       suburb: string | null;
       city: string | null;

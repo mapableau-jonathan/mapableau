@@ -5,10 +5,10 @@ import { useEffect } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
-import type { Provider } from "./types";
+import type { ProviderOutlet } from "./types";
 
 const markerIcon = L.divIcon({
-  className: "provider-location-marker",
+  className: "provider-outlet-location-marker",
   html: `<div style="width:22px;height:22px;background:#2563eb;border:2px solid white;border-radius:50%;box-shadow:0 2px 4px rgba(0,0,0,0.3)"></div>`,
   iconSize: [22, 22],
   iconAnchor: [11, 11],
@@ -40,14 +40,14 @@ function FitBounds({
   return null;
 }
 
-type ProviderLocationMapProps = {
-  provider: Provider;
+type ProviderOutletLocationMapProps = {
+  providerOutlet: ProviderOutlet;
 };
 
-export default function ProviderLocationMap({
-  provider,
-}: ProviderLocationMapProps) {
-  const markers = provider.locations
+export default function ProviderOutletLocationMap({
+  providerOutlet,
+}: ProviderOutletLocationMapProps) {
+  const markers = providerOutlet.locations
     .map((loc) => {
       const address = loc.address ?? null;
       if (!address) return null;
@@ -58,7 +58,7 @@ export default function ProviderLocationMap({
       (m): m is { coords: [number, number]; label: string } => m !== null,
     );
 
-  if (provider.locations.length === 0) return null;
+  if (providerOutlet.locations.length === 0) return null;
 
   return (
     <section className="space-y-4">
@@ -85,7 +85,7 @@ export default function ProviderLocationMap({
         </div>
       </div>
       <ul className="space-y-1 text-sm text-muted-foreground">
-        {provider.locations.map((loc) => {
+        {providerOutlet.locations.map((loc) => {
           const address = loc.address ?? null;
           if (!address) return null;
           return (
