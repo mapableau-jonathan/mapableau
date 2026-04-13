@@ -4,27 +4,11 @@ import { getBoundingBox } from "@/app/utils/getBoundingBox";
 import { distanceKm } from "@/lib/geo";
 import { prisma, type Prisma } from "@/lib/prisma";
 
+import { providerOutletFinderInclude } from "./prisma-types";
+
 // todo: review this file
 
 const MAX_LIMIT = 100;
-
-export const providerOutletFinderInclude = {
-  providers: {
-    include: {
-      services: { include: { serviceDefinition: true } },
-      specialisations: { include: { specialisationDefinition: true } },
-      businessHours: true,
-    },
-  },
-  providerOutlets: {
-    include: {
-      provider: true,
-      services: { include: { serviceDefinition: true } },
-      specialisations: { include: { specialisationDefinition: true } },
-      businessHours: true,
-    },
-  },
-} satisfies Prisma.AddressInclude;
 
 export type NearbyProviderResult = {
   address: Prisma.AddressGetPayload<{

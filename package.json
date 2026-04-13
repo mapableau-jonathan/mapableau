@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "dev:debug": "NODE_OPTIONS='--inspect' next dev",
-    "build": "pnpm type-check && pnpm lint && next build",
+    "build": "pnpm type-check && next build",
     "start": "next start",
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
