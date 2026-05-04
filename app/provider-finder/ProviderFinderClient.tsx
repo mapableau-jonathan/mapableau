@@ -11,14 +11,20 @@ import {
   X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { cn } from "@/app/lib/utils";
 import type { MapSearchView } from "@/components/Map";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { distanceKm } from "@/lib/geo";
+
+import { getBoundingBox } from "../utils/getBoundingBox";
 
 import { ProviderCard } from "./components/ProviderCard";
+import ProviderOutletAutocomplete from "./components/ProviderOutletAutocomplete";
 import { ProviderOutletCard } from "./components/ProviderOutletCard";
 import { useAddressesAndAssociatedProvidersNearby } from "./hooks/useAddressesAndAssociatedProvidersNearby";
 import { useUserLocation } from "./hooks/useUserLocation";
@@ -35,6 +41,9 @@ type SortMode = "relevance" | "distance" | "rating";
 
 const RADIUS_KM = 5;
 const MAP_PIN_LIMIT = 100;
+const MIN_MAP_FETCH_MOVE_KM = 1;
+const MIN_MAP_FETCH_RADIUS_DELTA_KM = 2;
+const MIN_MAP_FETCH_RADIUS_DELTA_RATIO = 0.2;
 
 const PAGE_SIZE = 9;
 
@@ -90,98 +99,184 @@ export default function ProviderFinderClient({
 }) {
   // todo: clean up and move everything to hooks and components
 
+  const router = useRouter();
+  const [manualMapUpdate, setManualMapUpdate] = useState(0);
   const [query, setQuery] = useState("");
+  const [autocompleteQuery, setAutocompleteQuery] = useState("");
   const [categoryId, setCategoryId] = useState<"all" | string>("all");
   const [registeredOnly, setRegisteredOnly] = useState(false);
   const [view, setView] = useState<ViewMode>("grid");
   const [sort, setSort] = useState<SortMode>("relevance");
   const [page, setPage] = useState(1);
-  const {
-    coordsReady,
-    selectedLocation,
-    setSelectedLocation,
-    userLocation,
-    getUserLocation,
-    locationLoading,
-    locationError,
-  } = useUserLocation({ setPage });
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [selectedProviderOrOutlet, setSelectedProviderOrOutlet] =
     useState<SelectedProviderOrOutlet>(null);
   const [mapSearchViewport, setMapSearchViewport] =
     useState<MapSearchView | null>(null);
-  const q = query.trim().toLowerCase();
-  const loc = selectedLocation.trim().toLowerCase();
-
-  const onMapViewChange = useCallback((view: MapSearchView) => {
-    setMapSearchViewport((prev) => {
-      if (
-        prev &&
-        prev.lat === view.lat &&
-        prev.lng === view.lng &&
-        prev.radiusKm === view.radiusKm
-      ) {
-        return prev;
-      }
-      return view;
+  const { userLocation, getUserLocation, locationLoading, locationError } =
+    useUserLocation({
+      setPage,
+      onLocationChange: (location) => {
+        setManualMapUpdate((prev) => prev + 1);
+        const { minLat, maxLat, minLon, maxLon } = getBoundingBox(
+          location.lat,
+          location.lng,
+          RADIUS_KM,
+        );
+        setMapSearchViewport({
+          minLat,
+          maxLat,
+          minLon,
+          maxLon,
+        });
+      },
     });
-  }, []);
+  const q = query.trim().toLowerCase();
+
+  const onMapViewChange = useCallback(
+    (view: MapSearchView) => {
+      if (locationLoading) {
+        return;
+      }
+      setMapSearchViewport((prev) => {
+        if (!prev) {
+          return view;
+        }
+
+        const movedKm = distanceKm(
+          prev.minLat,
+          prev.minLon,
+          view.minLat,
+          view.minLon,
+        );
+        // Required?
+        // const radiusDeltaKm = Math.abs(prev.radiusKm - view.radiusKm);
+        // const radiusDeltaRatio = radiusDeltaKm / Math.max(prev.radiusKm, 0.1);
+
+        // console.log("movedKm", movedKm);
+        // console.log("radiusDeltaKm", radiusDeltaKm);
+        // console.log("radiusDeltaRatio", radiusDeltaRatio);
+
+        const centerMovedEnough = movedKm >= MIN_MAP_FETCH_MOVE_KM;
+        // const radiusChangedEnough =
+        //   radiusDeltaKm >= MIN_MAP_FETCH_RADIUS_DELTA_KM ||
+        //   radiusDeltaRatio >= MIN_MAP_FETCH_RADIUS_DELTA_RATIO;
+
+        // console.log("centerMovedEnough", centerMovedEnough);
+        // console.log("radiusChangedEnough", radiusChangedEnough);
+        if (!centerMovedEnough) {
+          return prev;
+        }
+
+        return view;
+      });
+    },
+    [locationLoading],
+  );
 
   const getUserLocationAndClearMapSearch = useCallback(async () => {
     setMapSearchViewport(null);
     await getUserLocation();
   }, [getUserLocation]);
 
+  const selectFn = useCallback((data: any[]) => {
+    const providers = [];
+    const providerOutlets = [];
+    // console.log("data", data);
+
+    for (const a of data) {
+      if (a.address.providers.length > 0) {
+        for (const p of a.address.providers) {
+          providers.push({
+            type: "provider" as const,
+            provider: p,
+            address: a.address,
+            distanceKm: a.distanceKm,
+          });
+        }
+      }
+
+      if (a.address.providerOutlets.length > 0) {
+        for (const o of a.address.providerOutlets) {
+          providerOutlets.push({
+            type: "outlet" as const,
+            providerOutlet: o,
+            address: a.address,
+            distanceKm: a.distanceKm,
+          });
+        }
+      }
+    }
+
+    return { providers, providerOutlets };
+  }, []);
+
   const {
-    data: addressesAndAssociatedProvidersNearby = [],
+    data: { providers, providerOutlets } = {
+      providers: [],
+      providerOutlets: [],
+    },
     isLoading,
+    isFetching,
     isError,
     error,
   } = useAddressesAndAssociatedProvidersNearby(
-    mapSearchViewport?.lat ?? userLocation?.lat,
-    mapSearchViewport?.lng ?? userLocation?.lng,
-    mapSearchViewport?.radiusKm ?? RADIUS_KM,
-    coordsReady && userLocation != null,
+    mapSearchViewport?.minLat,
+    mapSearchViewport?.maxLat,
+    mapSearchViewport?.minLon,
+    mapSearchViewport?.maxLon,
+    mapSearchViewport != null,
+    selectFn,
   );
 
-  console.log(
-    "addressesAndAssociatedProvidersNearby",
-    addressesAndAssociatedProvidersNearby,
-  );
+  // console.log("providers", providers);
+  // console.log("providerOutlets", providerOutlets);
+
+  // const providers = providersAndProviderOutlets?.providers ?? [];
+  // const providerOutlets = providersAndProviderOutlets?.providerOutlets ?? [];
+
+  // console.log(
+  //   "addressesAndAssociatedProvidersNearby",
+  //   addressesAndAssociatedProvidersNearby,
+  // );
 
   // todo: distinguish between provider and outlets, should these display the same?
 
   // todo: consider case where address has providers and outlets
 
-  const providers = useMemo(
-    () =>
-      addressesAndAssociatedProvidersNearby
-        .filter((a) => a.address.providers.length > 0)
-        .flatMap((a) =>
-          a.address.providers.map((p) => ({
-            type: "provider" as const,
-            provider: p,
-            address: a.address,
-            distanceKm: a.distanceKm,
-          })),
-        ),
-    [addressesAndAssociatedProvidersNearby],
-  );
+  // const providers = useMemo(
+  //   () =>
+  //     addressesAndAssociatedProvidersNearby
+  //       .filter((a) => a.address.providers.length > 0)
+  //       .flatMap((a) =>
+  //         a.address.providers.map((p) => ({
+  //           type: "provider" as const,
+  //           provider: p,
+  //           address: a.address,
+  //           distanceKm: a.distanceKm,
+  //         })),
+  //       ),
+  //   [addressesAndAssociatedProvidersNearby],
+  // );
 
-  const providerOutlets = useMemo(
-    () =>
-      addressesAndAssociatedProvidersNearby
-        .filter((a) => a.address.providerOutlets.length > 0)
-        .flatMap((a) =>
-          a.address.providerOutlets.map((o) => ({
-            type: "outlet" as const,
-            providerOutlet: o,
-            address: a.address,
-            distanceKm: a.distanceKm,
-          })),
-        ),
-    [addressesAndAssociatedProvidersNearby],
-  );
+  // console.log("providers", providers);
+
+  // const providerOutlets = useMemo(
+  //   () =>
+  //     addressesAndAssociatedProvidersNearby
+  //       .filter((a) => a.address.providerOutlets.length > 0)
+  //       .flatMap((a) =>
+  //         a.address.providerOutlets.map((o) => ({
+  //           type: "outlet" as const,
+  //           providerOutlet: o,
+  //           address: a.address,
+  //           distanceKm: a.distanceKm,
+  //         })),
+  //       ),
+  //   [addressesAndAssociatedProvidersNearby],
+  // );
+
+  // console.log("providerOutlets", providerOutlets);
 
   const filteredProviders = useMemo(() => {
     return providers.filter(({ provider: p, address: a }) => {
@@ -195,12 +290,6 @@ export default function ProviderFinderClient({
         )
       )
         return false;
-
-      if (loc) {
-        const locHaystack =
-          `${a.suburb} ${a.state} ${a.postcode}`.toLowerCase();
-        if (!locHaystack.includes(loc)) return false;
-      }
 
       if (q) {
         const haystack = [
@@ -218,7 +307,7 @@ export default function ProviderFinderClient({
 
       return true;
     });
-  }, [providers, registeredOnly, categoryId, loc, q]);
+  }, [providers, registeredOnly, categoryId, q]);
 
   const filteredProviderOutlets = useMemo(() => {
     return providerOutlets.filter(({ providerOutlet: o, address: a }) => {
@@ -232,12 +321,6 @@ export default function ProviderFinderClient({
         )
       )
         return false;
-
-      if (loc) {
-        const locHaystack =
-          `${a.suburb} ${a.state} ${a.postcode}`.toLowerCase();
-        if (!locHaystack.includes(loc)) return false;
-      }
 
       if (q) {
         const haystack = [
@@ -255,19 +338,11 @@ export default function ProviderFinderClient({
 
       return true;
     });
-  }, [providerOutlets, categoryId, loc, q]);
+  }, [providerOutlets, categoryId, q]);
 
   const filteredCombinedProviderAndOutletAddresses = useMemo(() => {
     return [...filteredProviders, ...filteredProviderOutlets];
   }, [filteredProviders, filteredProviderOutlets]);
-
-  // todo: remove
-  // const t = combinedProviderAndOutletAddresses[0];
-  // if ("provider" in t) {
-  //   const p = t.provider;
-  // } else {
-  //   const o = t.providerOutlet;
-  // }
 
   // todo: clean up and move to hook
   const filteredSortedCombinedProviderAndOutletAddresses = useMemo(() => {
@@ -340,8 +415,8 @@ export default function ProviderFinderClient({
 
   const clearFilters = () => {
     setQuery("");
-    setSelectedLocation("");
     setCategoryId("all");
+    setSelectedProviderOrOutlet(null);
     setRegisteredOnly(false);
     setSort("relevance");
     setPage(1);
@@ -349,7 +424,6 @@ export default function ProviderFinderClient({
 
   const hasActiveFilters =
     query.trim() ||
-    selectedLocation.trim() ||
     categoryId !== "all" ||
     registeredOnly ||
     sort !== "relevance";
@@ -415,28 +489,24 @@ export default function ProviderFinderClient({
                     Search
                   </label>
                   <div className="relative mt-1">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      // ref={searchInputRef}
+                    <ProviderOutletAutocomplete
                       id="provider-search-main"
-                      type="text"
-                      value={query}
-                      onChange={(e) => {
-                        // setQuery(e.target.value);
-                        // setShowAutocomplete(true);
-                        // setSelectedIndex(-1);
+                      latitude={userLocation?.lat}
+                      longitude={userLocation?.lng}
+                      mapSearchView={mapSearchViewport}
+                      value={autocompleteQuery}
+                      onValueChange={(nextValue) => {
+                        setAutocompleteQuery(nextValue);
                         // setPage(1);
                       }}
-                      onFocus={() => {
-                        // if (autocompleteSuggestions.length > 0) {
-                        //   console.log("showing autocomplete");
-                        //   setShowAutocomplete(true);
-                        // } else {
-                        //   console.log("not showing autocomplete");
-                        // }
+                      onSelect={(item) => {
+                        const path =
+                          item.type === "provider"
+                            ? `/provider/${encodeURIComponent(item.id)}`
+                            : `/provider-outlet/${encodeURIComponent(item.id)}`;
+                        router.push(path);
                       }}
-                      placeholder="Provider name or service (e.g. therapy, transport)"
-                      className="w-full rounded-lg border border-input bg-background px-9 py-2.5 text-sm shadow-sm outline-none transition focus:border-primary/30 focus:ring-2 focus:ring-ring"
+                      className="mt-1"
                     />
                   </div>
                 </div>
@@ -547,7 +617,7 @@ export default function ProviderFinderClient({
                   {filtersExpanded && (
                     <div className="min-w-0 space-y-4">
                       <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-12">
-                        <div className="min-w-0 sm:col-span-2 lg:col-span-4">
+                        <div className="min-w-0 sm:col-span-2 lg:col-span-6">
                           <label
                             htmlFor="provider-finder-search"
                             className="text-xs font-medium text-muted-foreground"
@@ -569,7 +639,7 @@ export default function ProviderFinderClient({
                           </div>
                         </div>
 
-                        <div className="min-w-0 sm:col-span-2 lg:col-span-4">
+                        <div className="min-w-0 sm:col-span-2 lg:col-span-2">
                           <label
                             htmlFor="provider-finder-location"
                             className="text-xs font-medium text-muted-foreground"
@@ -577,7 +647,7 @@ export default function ProviderFinderClient({
                             Location
                           </label>
                           <div className="mt-1 flex min-w-0 gap-2">
-                            <input
+                            {/* <input
                               id="provider-finder-location"
                               value={selectedLocation}
                               onChange={(e) => {
@@ -586,11 +656,12 @@ export default function ProviderFinderClient({
                               }}
                               placeholder="Suburb or postcode"
                               className="min-w-0 flex-1 rounded-lg border border-input bg-background px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-primary/30 focus:ring-2 focus:ring-ring"
-                            />
+                            /> */}
                             <Button
                               type="button"
                               variant="outline"
                               size="default"
+                              style={{ width: "100%" }}
                               onClick={getUserLocationAndClearMapSearch}
                               disabled={locationLoading}
                               className="shrink-0 gap-1.5 px-3"
@@ -723,14 +794,35 @@ export default function ProviderFinderClient({
               </Button>
             </Card>
           ) : null}
-          <Map
-            providers={filteredProviders}
-            providerOutlets={filteredProviderOutlets}
-            userPosition={userLocation}
-            addressToCenterOn={selectedProviderOrOutlet ?? null}
-            onViewChange={onMapViewChange}
-            fitBoundsPolicy="initial-only"
-          />
+          <div className="relative">
+            {isFetching ? (
+              <div className="pointer-events-none absolute left-1/2 top-3 z-[500] -translate-x-1/2">
+                <Badge
+                  variant="secondary"
+                  className="gap-1.5 border border-border bg-background/95 text-foreground shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/80"
+                >
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Updating map results...
+                </Badge>
+              </div>
+            ) : null}
+            <Map
+              key={
+                userLocation
+                  ? userLocation.lat.toString() +
+                    userLocation.lng.toString() +
+                    manualMapUpdate.toString()
+                  : manualMapUpdate.toString()
+              }
+              providers={filteredProviders}
+              providerOutlets={filteredProviderOutlets}
+              userPosition={userLocation}
+              addressToCenterOn={selectedProviderOrOutlet ?? null}
+              onViewChange={onMapViewChange}
+              fitBoundsPolicy="initial-only"
+              initialSearchView={mapSearchViewport}
+            />
+          </div>
         </section>
 
         <section className="container mx-auto mt-8 px-4">
@@ -771,10 +863,14 @@ export default function ProviderFinderClient({
                           address={p.address}
                           provider={p.provider}
                           view={view}
-                          onSelect={
-                            (providerOrOutletAddress) => {}
-                            // setSelectedProviderOrOutlet(providerOrOutletAddress)
-                          }
+                          onSelect={(provider) => {
+                            setSelectedProviderOrOutlet({
+                              type: "provider",
+                              provider: provider,
+                              address: p.address,
+                              distanceKm: p.distanceKm,
+                            });
+                          }}
                           isSelected={
                             selectedProviderOrOutlet?.type === "provider" &&
                             selectedProviderOrOutlet.provider.id ===
@@ -791,6 +887,19 @@ export default function ProviderFinderClient({
                           distanceKm={p.distanceKm}
                           providerOutlet={p.providerOutlet}
                           view={view}
+                          onSelect={(providerOutlet) => {
+                            setSelectedProviderOrOutlet({
+                              type: "outlet",
+                              providerOutlet: providerOutlet,
+                              address: p.address,
+                              distanceKm: p.distanceKm,
+                            });
+                          }}
+                          isSelected={
+                            selectedProviderOrOutlet?.type === "outlet" &&
+                            selectedProviderOrOutlet.providerOutlet.id ===
+                              p.providerOutlet.id
+                          }
                         />
                       );
                     }

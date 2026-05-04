@@ -5,7 +5,6 @@ import { SiteFooterAuthLinks } from "./SiteFooterAuthLinks";
 const footerNav = [
   { href: "/", label: "Home" },
   { href: "/provider-finder", label: "Provider finder" },
-  { href: "/map", label: "Map" },
   { href: "/dashboard", label: "Dashboard" },
 ] as const;
 

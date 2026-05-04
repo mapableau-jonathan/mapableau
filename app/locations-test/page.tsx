@@ -2,8 +2,6 @@
 
 import { useState } from "react";
 
-import ProviderOutletAutocomplete from "../provider-finder/components/ProviderOutletAutocomplete";
-
 interface Place {
   id: string;
   name: string;
@@ -48,22 +46,6 @@ export default function PlacesPage() {
   return (
     <div className="max-w-xl mx-auto p-6">
       <h1 className="text-2xl font-bold mb-4">Nearby Places Search</h1>
-
-      <ProviderOutletAutocomplete
-        id="provider-search-main"
-        lat={lat}
-        lon={lon}
-        searchRadiusKm={distanceKm}
-        value={query}
-        onValueChange={(nextValue) => {
-          setQuery(nextValue);
-          // setPage(1);
-        }}
-        onSelect={(item) => {
-          // if (item.suburb) setSelectedLocation(item.suburb);
-        }}
-        className="mt-1"
-      />
 
       <div className="flex flex-col gap-3 mb-4">
         <input

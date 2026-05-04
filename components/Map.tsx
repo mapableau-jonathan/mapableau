@@ -31,9 +31,10 @@ type ProviderOrOutletWithAddress =
 
 /** Center + radius used with `/api/provider-finder/nearby` when the map viewport changes. */
 export type MapSearchView = {
-  lat: number;
-  lng: number;
-  radiusKm: number;
+  minLat: number;
+  maxLat: number;
+  minLon: number;
+  maxLon: number;
 };
 
 function radiusKmCoveringVisibleMap(map: L.Map): number {
@@ -56,9 +57,11 @@ function radiusKmCoveringVisibleMap(map: L.Map): number {
 /** Reports map center and a radius that covers the visible bounds (debounced `moveend`). */
 function MapViewReporter({
   onViewChange,
-  debounceMs = 450,
+  ignoreNextViewChangeRef,
+  debounceMs = 300,
 }: {
   onViewChange: (view: MapSearchView) => void;
+  ignoreNextViewChangeRef: React.MutableRefObject<boolean>;
   debounceMs?: number;
 }) {
   const map = useMap();
@@ -68,16 +71,17 @@ function MapViewReporter({
 
   useEffect(() => {
     const emit = () => {
-      const center = map.getCenter();
-      const radiusKm = radiusKmCoveringVisibleMap(map);
-      console.log("lat", Number(center.lat.toFixed(4)));
-      console.log("lng", Number(center.lng.toFixed(4)));
-      console.log("radiusKm", radiusKm);
-      console.log("center", center);
+      if (ignoreNextViewChangeRef.current) {
+        ignoreNextViewChangeRef.current = false;
+        return;
+      }
+      const b = map.getBounds();
+
       onViewChangeRef.current({
-        lat: Number(center.lat.toFixed(4)),
-        lng: Number(center.lng.toFixed(4)),
-        radiusKm: Math.round(radiusKm * 10) / 10,
+        minLat: b.getSouth(),
+        maxLat: b.getNorth(),
+        minLon: b.getWest(),
+        maxLon: b.getEast(),
       });
     };
 
@@ -92,7 +96,7 @@ function MapViewReporter({
       map.off("moveend", schedule);
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [map, debounceMs]);
+  }, [map, debounceMs, ignoreNextViewChangeRef]);
 
   return null;
 }
@@ -137,23 +141,56 @@ type MapProps = {
    * do not move the map (avoids feedback loops when markers come from the map viewport).
    */
   fitBoundsPolicy?: "always" | "initial-only";
+  initialSearchView?: MapSearchView | null;
 };
 
 // Default center: Sydney, Australia
 const initialCenter: LatLngExpression = [-33.8688, 151.2093];
-const initialZoom = 6;
+const initialZoom = 15;
+
+function getBoundsForSearchView(view: MapSearchView) {
+  return latLngBounds([view.minLat, view.minLon], [view.maxLat, view.maxLon]);
+}
+
+function InitialSearchView({
+  initialSearchView,
+}: {
+  initialSearchView: MapSearchView | null;
+}) {
+  const map = useMap();
+  const lastAppliedSignatureRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!initialSearchView) {
+      lastAppliedSignatureRef.current = null;
+      return;
+    }
+
+    const signature = `${initialSearchView.minLat}:${initialSearchView.minLon}:${initialSearchView.maxLat}:${initialSearchView.maxLon}`;
+    if (lastAppliedSignatureRef.current !== null) {
+      return;
+    }
+
+    map.fitBounds(getBoundsForSearchView(initialSearchView), {
+      padding: [0, 0],
+      maxZoom: 25,
+    });
+    // map.zoomIn();
+    lastAppliedSignatureRef.current = signature;
+  }, [initialSearchView, map]);
+
+  return null;
+}
 
 // Component to adjust map bounds when markers change
 function FitBounds({
   markers,
-  userPosition,
   fitBoundsPolicy,
 }: {
   markers: {
     coords: LatLngExpression;
     providerOrOutletWithAddress: ProviderOrOutletWithAddress;
   }[];
-  userPosition: { lat: number; lng: number } | null;
   fitBoundsPolicy: "always" | "initial-only";
 }) {
   const map = useMap();
@@ -163,9 +200,6 @@ function FitBounds({
     const points: [number, number][] = markers.map(
       (m) => m.coords as [number, number],
     );
-    if (userPosition) {
-      points.push([userPosition.lat, userPosition.lng]);
-    }
     if (points.length === 0) {
       didFitRef.current = false;
       map.setView(initialCenter, initialZoom);
@@ -186,7 +220,7 @@ function FitBounds({
     if (fitBoundsPolicy === "initial-only") {
       didFitRef.current = true;
     }
-  }, [map, markers, userPosition, fitBoundsPolicy]);
+  }, [map, markers, fitBoundsPolicy]);
 
   return null;
 }
@@ -207,8 +241,10 @@ function getCoords(address: Address): [number, number] | null {
 // Fly map to a provider when centerOnProvider changes
 function FlyToProvider({
   providerOrOutlet,
+  ignoreNextViewChangeRef,
 }: {
   providerOrOutlet: ProviderOrOutletWithAddress | null;
+  ignoreNextViewChangeRef: React.MutableRefObject<boolean>;
 }) {
   const map = useMap();
 
@@ -217,8 +253,9 @@ function FlyToProvider({
     if (!address) return;
     const coords = getCoords(address);
     if (!coords) return;
+    ignoreNextViewChangeRef.current = true;
     map.flyTo(coords, CENTER_ZOOM, { duration: 0.5 });
-  }, [map, providerOrOutlet]);
+  }, [map, providerOrOutlet, ignoreNextViewChangeRef]);
 
   return null;
 }
@@ -230,7 +267,9 @@ export default function Map({
   addressToCenterOn = null,
   onViewChange,
   fitBoundsPolicy = "always",
+  initialSearchView = null,
 }: MapProps) {
+  const ignoreNextViewChangeRef = useRef(false);
   const markers = [...providers, ...providerOutlets]
     .map((p) => {
       const address = p.address;
@@ -245,14 +284,37 @@ export default function Map({
     })
     .filter((m) => m !== null);
 
+  const centerLat = initialSearchView
+    ? (initialSearchView.minLat + initialSearchView.maxLat) / 2
+    : null;
+  const centerLng = initialSearchView
+    ? (initialSearchView.minLon + initialSearchView.maxLon) / 2
+    : null;
+
+  // console.log(
+  //   "centerLat && centerLng ? ([centerLat, centerLng] as LatLngExpression) : userPosition ? ([userPosition.lat, userPosition.lng] as LatLngExpression) : initialCenter",
+  //   centerLat && centerLng
+  //     ? ([centerLat, centerLng] as LatLngExpression)
+  //     : userPosition
+  //       ? ([userPosition.lat, userPosition.lng] as LatLngExpression)
+  //       : initialCenter,
+  // );
+
   return (
     <MapContainer
-      center={
-        userPosition
-          ? ([userPosition.lat, userPosition.lng] as LatLngExpression)
-          : initialCenter
-      }
-      zoom={initialZoom}
+      // bounds={
+      //   initialSearchView
+      //     ? getBoundsForSearchView(initialSearchView)
+      //     : undefined
+      // }
+      // center={
+      //   centerLat && centerLng
+      //     ? ([centerLat, centerLng] as LatLngExpression)
+      //     : userPosition
+      //       ? ([userPosition.lat, userPosition.lng] as LatLngExpression)
+      //       : initialCenter
+      // }
+      // zoom={initialZoom}
       style={{ height: "500px", width: "100%" }}
       scrollWheelZoom={true}
     >
@@ -260,13 +322,21 @@ export default function Map({
         attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      <FitBounds
-        markers={markers}
-        userPosition={userPosition ?? null}
-        fitBoundsPolicy={fitBoundsPolicy}
+      {/* todo: review */}
+      {initialSearchView ? (
+        <InitialSearchView initialSearchView={initialSearchView} />
+      ) : null}
+      {/* <FitBounds markers={markers} fitBoundsPolicy={fitBoundsPolicy} /> */}
+      <FlyToProvider
+        providerOrOutlet={addressToCenterOn ?? null}
+        ignoreNextViewChangeRef={ignoreNextViewChangeRef}
       />
-      <FlyToProvider providerOrOutlet={addressToCenterOn ?? null} />
-      {onViewChange ? <MapViewReporter onViewChange={onViewChange} /> : null}
+      {onViewChange ? (
+        <MapViewReporter
+          onViewChange={onViewChange}
+          ignoreNextViewChangeRef={ignoreNextViewChangeRef}
+        />
+      ) : null}
       {userPosition ? (
         <Marker
           position={[userPosition.lat, userPosition.lng]}
@@ -280,6 +350,13 @@ export default function Map({
           "provider" in providerOrOutletWithAddress
             ? providerOrOutletWithAddress.provider
             : providerOrOutletWithAddress.providerOutlet;
+
+        const addressToCenterOnProviderOrOutletId =
+          addressToCenterOn?.type === "provider"
+            ? addressToCenterOn.provider.id
+            : addressToCenterOn?.type === "outlet"
+              ? addressToCenterOn.providerOutlet.id
+              : null;
         // if ("provider" in providerOrOutletWithAddress) {
         //   const provider = providerOrOutletWithAddress.provider;
         //   const address = providerOrOutletWithAddress.address;
@@ -290,12 +367,26 @@ export default function Map({
         //   const distanceKm = providerOrOutletWithAddress.distanceKm;
         // }
 
+        console.log("entity.id", entity.id);
+        console.log(
+          "addressToCenterOn?.address.id",
+          addressToCenterOn?.address.id,
+        );
+        console.log(
+          "entity.id === addressToCenterOn?.address.id",
+          entity.id === addressToCenterOn?.address.id,
+        );
+        console.log(
+          "entity.id === addressToCenterOn?.address.id",
+          entity.id === addressToCenterOn?.address.id,
+        );
+
         return (
           <Marker
             key={entity.id}
             position={coords}
             icon={
-              entity.id === addressToCenterOn?.address.id
+              entity.id === addressToCenterOnProviderOrOutletId
                 ? redMarkerIcon
                 : defaultMarkerIcon
             }

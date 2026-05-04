@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getBoundingBox } from "@/app/utils/getBoundingBox";
 import { distanceKm } from "@/lib/geo";
 import { prisma, type Prisma } from "@/lib/prisma";
 
@@ -23,28 +22,35 @@ export async function GET(
   req: NextRequest,
 ): Promise<NextResponse<NearbyProviderResult[] | { error: string }>> {
   try {
-    // todo: limit radius
     const { searchParams } = new URL(req.url);
 
-    const lat = parseFloat(searchParams.get("lat") || "");
-    const lon = parseFloat(searchParams.get("lng") || "");
-    const radius = parseFloat(searchParams.get("radius") || "5");
+    // todo: should center be based on user location?
+    const minLat = parseFloat(searchParams.get("minLat") || "");
+    const maxLat = parseFloat(searchParams.get("maxLat") || "");
+    const minLon = parseFloat(searchParams.get("minLon") || "");
+    const maxLon = parseFloat(searchParams.get("maxLon") || "");
 
-    if (isNaN(lat) || isNaN(lon)) {
+    if (isNaN(minLat) || isNaN(maxLat) || isNaN(minLon) || isNaN(maxLon)) {
       return NextResponse.json(
-        { error: "Invalid latitude or longitude" },
+        { error: "Invalid minLat, maxLat, minLon, maxLon" },
         { status: 400 },
       );
     }
 
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    if (
+      !Number.isFinite(minLat) ||
+      !Number.isFinite(maxLat) ||
+      !Number.isFinite(minLon) ||
+      !Number.isFinite(maxLon)
+    ) {
       return NextResponse.json(
-        { error: "Valid lat and lng query parameters are required." },
+        {
+          error:
+            "Valid minLat, maxLat, minLon, maxLon query parameters are required.",
+        },
         { status: 400 },
       );
     }
-
-    const { minLat, maxLat, minLon, maxLon } = getBoundingBox(lat, lon, radius);
 
     const addressesWithProviders = await prisma.address.findMany({
       include: providerOutletFinderInclude,
@@ -61,10 +67,13 @@ export async function GET(
       take: MAX_LIMIT,
     });
 
+    const centerLat = (minLat + maxLat) / 2;
+    const centerLon = (minLon + maxLon) / 2;
+
     const addressesWithProvidersAndDistance = addressesWithProviders
       .map((a) => ({
         address: a,
-        distanceKm: distanceKm(lat, lon, a.latitude!, a.longitude!),
+        distanceKm: distanceKm(centerLat, centerLon, a.latitude!, a.longitude!),
       }))
       .sort((a, b) => a.distanceKm - b.distanceKm);
 

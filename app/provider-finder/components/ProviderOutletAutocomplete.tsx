@@ -5,6 +5,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { AutocompleteItem } from "@/app/api/provider-finder/autocomplete/types";
 import { cn } from "@/app/lib/utils";
+import { MapSearchView } from "@/components/Map";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 
@@ -12,9 +13,9 @@ import { useProviderOutletAutocomplete } from "../hooks/useProviderOutletAutocom
 
 type ProviderOutletAutocompleteProps = {
   id?: string;
-  lat: number;
-  lon: number;
-  searchRadiusKm: number;
+  mapSearchView: MapSearchView | null;
+  latitude?: number;
+  longitude?: number;
   value: string;
   onValueChange: (value: string) => void;
   onSelect?: (item: AutocompleteItem) => void;
@@ -49,9 +50,9 @@ function highlightText(text: string, query: string) {
 
 export default function ProviderOutletAutocomplete({
   id,
-  lat,
-  lon,
-  searchRadiusKm,
+  mapSearchView,
+  latitude,
+  longitude,
   value,
   onValueChange,
   onSelect,
@@ -63,7 +64,10 @@ export default function ProviderOutletAutocomplete({
   const [isOpen, setIsOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const listboxId = useId();
+  const isAwaitingMapSearchView =
+    mapSearchView == null || latitude == null || longitude == null;
 
+  // todo: move into autocomplete search bar once data has finished loading?
   const {
     items,
     queryResult: { isFetching, isError, error },
@@ -71,7 +75,13 @@ export default function ProviderOutletAutocomplete({
     minChars,
     fallback,
     debouncedQuery,
-  } = useProviderOutletAutocomplete(value, lat, lon, searchRadiusKm, isOpen);
+  } = useProviderOutletAutocomplete({
+    query: value,
+    mapSearchView,
+    latitude,
+    longitude,
+    enabled: isOpen && !isAwaitingMapSearchView,
+  });
 
   useEffect(() => {
     setActiveIndex(-1);
@@ -112,6 +122,7 @@ export default function ProviderOutletAutocomplete({
         id={id}
         ref={inputRef}
         value={value}
+        disabled={isAwaitingMapSearchView}
         onChange={(event) => {
           onValueChange(event.target.value);
           setIsOpen(true);
@@ -160,13 +171,22 @@ export default function ProviderOutletAutocomplete({
         aria-activedescendant={
           activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined
         }
+        aria-busy={isAwaitingMapSearchView}
         className="w-full rounded-lg border border-input bg-background px-9 py-2.5 text-sm shadow-sm outline-none transition focus:border-primary/30 focus:ring-2 focus:ring-ring"
       />
+      {isAwaitingMapSearchView ? (
+        <span className="pointer-events-none absolute right-3 top-1/2 z-10 -translate-y-1/2">
+          <Loader2
+            className="h-4 w-4 animate-spin text-muted-foreground"
+            aria-hidden
+          />
+        </span>
+      ) : null}
 
       {showPanel ? (
         <Card
           variant="outlined"
-          className="absolute z-50 mt-2 w-full overflow-hidden border-border/80 bg-background shadow-lg"
+          className="absolute z-[500] mt-2 w-full overflow-hidden border-border/80 bg-background shadow-lg"
         >
           <div
             id={listboxId}

@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import { AutocompleteResponse } from "@/app/api/provider-finder/autocomplete/types";
-import { getBoundingBox } from "@/app/utils/getBoundingBox";
+import { MapSearchView } from "@/components/Map";
 
 const MIN_CHARS = 3;
 const DEBOUNCE_MS = 300;
@@ -23,17 +23,19 @@ function useDebouncedValue(value: string, delayMs: number) {
   return debounced;
 }
 
-function cacheKeyForQuery(query: string) {
-  return query.trim().toLowerCase();
-}
-
-async function fetchProviderOutletAutocomplete(
-  query: string,
-  lat: number,
-  lon: number,
-  searchRadiusKm: number,
-  signal?: AbortSignal,
-): Promise<AutocompleteResponse> {
+async function fetchProviderOutletAutocomplete({
+  query,
+  mapSearchView,
+  latitude,
+  longitude,
+  signal,
+}: {
+  query: string;
+  mapSearchView: MapSearchView;
+  latitude: number;
+  longitude: number;
+  signal?: AbortSignal;
+}): Promise<AutocompleteResponse> {
   try {
     const controller = new AbortController();
 
@@ -46,17 +48,12 @@ async function fetchProviderOutletAutocomplete(
       controller.abort();
     }, FETCH_TIMEOUT_MS);
 
-    const { minLat, maxLat, minLon, maxLon } = getBoundingBox(
-      lat,
-      lon,
-      searchRadiusKm,
-    );
+    const { minLat, maxLat, minLon, maxLon } = mapSearchView;
 
     const params = new URLSearchParams({
       q: query,
-      // todo: clean up
-      lat: lat.toString(),
-      lon: lon.toString(),
+      lat: latitude.toString(),
+      lon: longitude.toString(),
       minLat: minLat.toString(),
       maxLat: maxLat.toString(),
       minLon: minLon.toString(),
@@ -108,13 +105,19 @@ async function fetchProviderOutletAutocomplete(
   }
 }
 
-export function useProviderOutletAutocomplete(
-  query: string,
-  lat: number,
-  lon: number,
-  searchRadiusKm: number,
+export function useProviderOutletAutocomplete({
+  query,
+  mapSearchView,
+  latitude,
+  longitude,
   enabled = true,
-) {
+}: {
+  query: string;
+  mapSearchView: MapSearchView | null;
+  latitude?: number;
+  longitude?: number;
+  enabled?: boolean;
+}) {
   const trimmed = query.trim();
   const debouncedQuery = useDebouncedValue(trimmed, DEBOUNCE_MS);
   const shouldFetch = enabled && debouncedQuery.length >= MIN_CHARS;
@@ -123,19 +126,27 @@ export function useProviderOutletAutocomplete(
     queryKey: [
       "provider-outlet-autocomplete",
       debouncedQuery,
-      lat,
-      lon,
-      searchRadiusKm,
+      latitude,
+      longitude,
+      mapSearchView,
     ],
-    queryFn: ({ signal }) =>
-      fetchProviderOutletAutocomplete(
-        debouncedQuery,
-        lat,
-        lon,
-        searchRadiusKm,
+    queryFn: ({ signal }) => {
+      if (!mapSearchView || !latitude || !longitude) {
+        throw new Error("Missing map search view, latitude, or longitude");
+      }
+      return fetchProviderOutletAutocomplete({
+        query: debouncedQuery,
+        mapSearchView,
+        latitude,
+        longitude,
         signal,
-      ),
-    enabled: shouldFetch,
+      });
+    },
+    enabled:
+      shouldFetch &&
+      mapSearchView != null &&
+      latitude != null &&
+      longitude != null,
     staleTime: STALE_TIME_MS,
     gcTime: GC_TIME_MS,
   });
