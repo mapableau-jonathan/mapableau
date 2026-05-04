@@ -285,7 +285,7 @@ export default function ProviderFinderClient({
         categoryId !== "all" &&
         // todo: confirm filtering by category works
         !p.services.some(
-          (s) =>
+          (s: any) =>
             s.serviceDefinition.id.toLowerCase() === categoryId.toLowerCase(),
         )
       )
@@ -297,7 +297,7 @@ export default function ProviderFinderClient({
           a.suburb,
           a.state,
           a.postcode,
-          ...p.services.map((s) => s.serviceDefinition.name),
+          ...p.services.map((s: any) => s.serviceDefinition.name),
         ]
           .join(" ")
           .toLowerCase();
@@ -316,7 +316,7 @@ export default function ProviderFinderClient({
       if (
         categoryId !== "all" &&
         !o.services.some(
-          (s) =>
+          (s: any) =>
             s.serviceDefinition.id.toLowerCase() === categoryId.toLowerCase(),
         )
       )
@@ -328,7 +328,7 @@ export default function ProviderFinderClient({
           a.suburb,
           a.state,
           a.postcode,
-          ...o.services.map((s) => s.serviceDefinition.name),
+          ...o.services.map((s: any) => s.serviceDefinition.name),
         ]
           .join(" ")
           .toLowerCase();
@@ -370,7 +370,7 @@ export default function ProviderFinderClient({
             state: a.address.state,
             postcode: a.address.postcode,
             categories: aProviderOrOutlet.services.map(
-              (s) => s.serviceDefinition.name,
+              (s: any) => s.serviceDefinition.name,
             ),
           },
           query,
@@ -382,7 +382,7 @@ export default function ProviderFinderClient({
             state: b.address.state,
             postcode: b.address.postcode,
             categories: bProviderOrOutlet.services.map(
-              (s) => s.serviceDefinition.name,
+              (s: any) => s.serviceDefinition.name,
             ),
           },
           query,
